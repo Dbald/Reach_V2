@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useProjectStore } from '@/store';
 
 const tools = [
@@ -10,12 +10,38 @@ const tools = [
   { id: 'zone' as const, label: 'Zone', shortcut: 'Z' },
 ] as const;
 
+const shortcutMap: Record<string, typeof tools[number]['id']> = {
+  v: 'select',
+  g: 'move',
+  r: 'rotate',
+  s: 'scale',
+  p: 'place',
+  z: 'zone',
+};
+
 export const Toolbar: React.FC = () => {
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const setActiveTool = useProjectStore((s) => s.setActiveTool);
   const viewMode = useProjectStore((s) => s.editor.viewMode);
   const setViewMode = useProjectStore((s) => s.setViewMode);
   const projectName = useProjectStore((s) => s.project?.name ?? 'Untitled');
+
+  // Keyboard shortcuts for tool switching
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore when typing in inputs
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      const tool = shortcutMap[e.key.toLowerCase()];
+      if (tool) {
+        e.preventDefault();
+        setActiveTool(tool);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setActiveTool]);
 
   return (
     <div style={styles.bar}>
