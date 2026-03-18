@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport, Environment } from '@react-three/drei';
 import { useProjectStore } from '@/store';
@@ -62,6 +62,9 @@ export const SceneViewport: React.FC = () => {
           />
         )}
 
+        {/* Background click to deselect */}
+        <DeselectOnMiss />
+
         {/* Scene objects */}
         <SceneObjects scene={scene} />
 
@@ -87,6 +90,39 @@ export const SceneViewport: React.FC = () => {
         {viewMode === 'editor' ? 'Edit Mode' : viewMode === 'preview' ? 'Preview Mode' : 'VR Mode'}
       </div>
     </div>
+  );
+};
+
+/** Click on empty space to deselect, or place a zone if zone tool is active */
+const DeselectOnMiss: React.FC = () => {
+  const selectObject = useProjectStore((s) => s.selectObject);
+  const activeTool = useProjectStore((s) => s.editor.activeTool);
+  const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
+  const addZone = useProjectStore((s) => s.addZone);
+
+  return (
+    <mesh
+      position={[0, -0.05, 0]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      onClick={(e) => {
+        if (activeTool === 'zone' && activeSceneId) {
+          const point = e.point;
+          addZone(activeSceneId, {
+            name: `Zone`,
+            shape: 'box',
+            points: [{ x: point.x, y: 0, z: point.z }],
+            size: { x: 3, y: 2, z: 3 },
+            walkable: true,
+            hasCollision: false,
+          });
+          return;
+        }
+        selectObject(null);
+      }}
+    >
+      <planeGeometry args={[500, 500]} />
+      <meshBasicMaterial visible={false} />
+    </mesh>
   );
 };
 
