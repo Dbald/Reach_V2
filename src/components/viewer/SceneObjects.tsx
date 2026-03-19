@@ -1,20 +1,24 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, Suspense } from 'react';
 import * as THREE from 'three';
+import { useLoader } from '@react-three/fiber';
 import { TransformControls, Html, Text as DreiText } from '@react-three/drei';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useProjectStore } from '@/store';
+import type { RenderMode } from '@/store/projectStore';
 import type { Scene, SceneObject } from '@/types';
 
 interface SceneObjectsProps {
   scene: Scene;
+  renderMode?: RenderMode;
 }
 
-export const SceneObjects: React.FC<SceneObjectsProps> = ({ scene }) => {
+export const SceneObjects: React.FC<SceneObjectsProps> = ({ scene, renderMode = 'lit' }) => {
   const objects = Object.values(scene.objects).filter((obj) => obj.visible);
 
   return (
     <group>
       {objects.map((obj) => (
-        <SceneObjectMesh key={obj.id} object={obj} sceneId={scene.id} />
+        <SceneObjectMesh key={obj.id} object={obj} sceneId={scene.id} renderMode={renderMode} />
       ))}
     </group>
   );
@@ -29,7 +33,39 @@ const toolToMode = (tool: string): 'translate' | 'rotate' | 'scale' | null => {
   }
 };
 
-const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ object: obj, sceneId }) => {
+/** Loads and renders a GLTF model */
+const GltfModel: React.FC<{
+  url: string;
+  onClick: (e: any) => void;
+  meshCallback: (node: THREE.Mesh | null) => void;
+}> = ({ url, onClick, meshCallback }) => {
+  const gltf = useLoader(GLTFLoader, url);
+  const groupRef = useRef<THREE.Group>(null);
+
+  useEffect(() => {
+    if (groupRef.current) {
+      // Use the group as the mesh ref for transform controls
+      meshCallback(groupRef.current as any);
+    }
+    return () => meshCallback(null);
+  }, [gltf, meshCallback]);
+
+  return (
+    <group ref={groupRef} onClick={onClick}>
+      <primitive object={gltf.scene.clone()} />
+    </group>
+  );
+};
+
+/** Fallback for GLTF loading */
+const GltfFallback: React.FC = () => (
+  <mesh>
+    <boxGeometry args={[0.5, 0.5, 0.5]} />
+    <meshStandardMaterial color="#64748b" wireframe />
+  </mesh>
+);
+
+const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMode: RenderMode }> = ({ object: obj, sceneId, renderMode }) => {
   const [meshReady, setMeshReady] = useState(false);
   const meshRef = useRef<THREE.Mesh>(null);
   const transformRef = useRef<any>(null);
@@ -37,6 +73,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
   const setObjectTransform = useProjectStore((s) => s.setObjectTransform);
   const selectedObjectId = useProjectStore((s) => s.editor.selectedObjectId);
   const activeTool = useProjectStore((s) => s.editor.activeTool);
+  const project = useProjectStore((s) => s.project);
   const isSelected = selectedObjectId === obj.id;
 
   const gizmoMode = toolToMode(activeTool);
@@ -107,6 +144,8 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
     return '#6b7280';
   };
 
+  const isWireframe = renderMode === 'wireframe';
+
   const gizmoElement = showGizmo && meshRef.current ? (
     <TransformControls
       ref={transformRef}
@@ -125,16 +164,47 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
 
   // --- Light ---
   if (obj.type === 'light') {
+    const lightIntensity = (obj.metadata?.intensity as number) ?? 1;
+    const lightColor = (obj.metadata?.color as string) ?? '#fff5e0';
+    const lightType = (obj.metadata?.lightType as string) ?? 'point';
+    const lightDistance = 10;
+
     return (
       <group position={pos}>
-        <pointLight intensity={1} distance={10} color="#fff5e0" />
+        {/* Actual light */}
+        {lightType === 'spot' ? (
+          <spotLight intensity={lightIntensity} distance={lightDistance} color={lightColor} angle={0.5} penumbra={0.5} castShadow />
+        ) : lightType === 'directional' ? (
+          <directionalLight intensity={lightIntensity} color={lightColor} castShadow />
+        ) : (
+          <pointLight intensity={lightIntensity} distance={lightDistance} color={lightColor} castShadow />
+        )}
+
+        {/* Visual indicator sphere */}
         <mesh ref={meshCallback as any} scale={scale} onClick={handleClick}>
           <sphereGeometry args={[0.2, 16, 16]} />
-          <meshBasicMaterial color="#ffe066" />
+          <meshBasicMaterial color={lightColor} wireframe={isWireframe} />
         </mesh>
+
+        {/* Light radius ring (visible feedback) */}
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[lightDistance * 0.3, lightDistance * 0.32, 32]} />
+          <meshBasicMaterial color={lightColor} transparent opacity={0.2} side={2} />
+        </mesh>
+
+        {/* Light direction line for spot/directional */}
+        {(lightType === 'spot' || lightType === 'directional') && (
+          <mesh position={[0, -1, 0]}>
+            <cylinderGeometry args={[0.02, 0.02, 2, 8]} />
+            <meshBasicMaterial color={lightColor} transparent opacity={0.4} />
+          </mesh>
+        )}
+
         {isSelected && (
           <Html center style={{ pointerEvents: 'none' }}>
-            <div style={labelStyle('#ffe066')}>Light</div>
+            <div style={labelStyle(lightColor)}>
+              {obj.name} ({lightType}, {lightIntensity.toFixed(1)})
+            </div>
           </Html>
         )}
         {gizmoElement}
@@ -149,12 +219,11 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
         <group position={pos} rotation={rotation}>
           <mesh ref={meshCallback as any} scale={scale} onClick={handleClick}>
             <coneGeometry args={[0.2, 0.4, 4]} />
-            <meshStandardMaterial color="#06b6d4" roughness={0.5} />
+            <meshStandardMaterial color="#06b6d4" roughness={0.5} wireframe={isWireframe} />
           </mesh>
-          {/* Lens indicator */}
           <mesh position={[0, -0.25, 0]}>
             <cylinderGeometry args={[0.08, 0.12, 0.1, 16]} />
-            <meshBasicMaterial color="#0891b2" />
+            <meshBasicMaterial color="#0891b2" wireframe={isWireframe} />
           </mesh>
           {isSelected && (
             <Html center position={[0, 0.5, 0]} style={{ pointerEvents: 'none' }}>
@@ -209,16 +278,17 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
           castShadow
         >
           <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial color="#1a1a2e" roughness={0.3} metalness={0.6} />
+          <meshStandardMaterial color="#1a1a2e" roughness={0.3} metalness={0.6} wireframe={isWireframe} />
           {selectionOutline}
         </mesh>
-        {/* Play icon overlay */}
-        <group position={[pos[0], pos[1], pos[2] + 0.03]}>
-          <mesh rotation={[0, 0, -Math.PI / 2]}>
-            <coneGeometry args={[0.15, 0.25, 3]} />
-            <meshBasicMaterial color="#a855f7" transparent opacity={0.8} />
-          </mesh>
-        </group>
+        {!isWireframe && (
+          <group position={[pos[0], pos[1], pos[2] + 0.03]}>
+            <mesh rotation={[0, 0, -Math.PI / 2]}>
+              <coneGeometry args={[0.15, 0.25, 3]} />
+              <meshBasicMaterial color="#a855f7" transparent opacity={0.8} />
+            </mesh>
+          </group>
+        )}
         {isSelected && (
           <Html center position={[pos[0], pos[1] + scale[1] * 0.55, pos[2]]} style={{ pointerEvents: 'none' }}>
             <div style={labelStyle('#a855f7')}>{obj.name}</div>
@@ -236,10 +306,9 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
         <group position={pos}>
           <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick}>
             <sphereGeometry args={[1, 16, 16]} />
-            <meshStandardMaterial color="#f97316" roughness={0.4} />
+            <meshStandardMaterial color="#f97316" roughness={0.4} wireframe={isWireframe} />
           </mesh>
-          {/* Sound wave rings */}
-          {[0.5, 0.8, 1.1].map((r, i) => (
+          {!isWireframe && [0.5, 0.8, 1.1].map((r, i) => (
             <mesh key={i} rotation={[Math.PI / 2, 0, 0]}>
               <torusGeometry args={[r, 0.01, 8, 32]} />
               <meshBasicMaterial color="#f97316" transparent opacity={0.3 - i * 0.08} />
@@ -254,6 +323,52 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
         {gizmoElement}
       </>
     );
+  }
+
+  // --- Asset (GLTF model) ---
+  if (obj.assetId && project) {
+    const asset = project.assets[obj.assetId];
+    const is3D = asset && ['glb', 'gltf', 'obj', 'fbx'].includes(asset.format);
+    if (asset && is3D && asset.url) {
+      return (
+        <>
+          <group position={pos} scale={scale} rotation={rotation}>
+            <Suspense fallback={<GltfFallback />}>
+              <GltfModel url={asset.url} onClick={handleClick} meshCallback={meshCallback} />
+            </Suspense>
+            {isSelected && (
+              <Html center position={[0, 1, 0]} style={{ pointerEvents: 'none' }}>
+                <div style={labelStyle('#3b82f6')}>{obj.name}</div>
+              </Html>
+            )}
+          </group>
+          {gizmoElement}
+        </>
+      );
+    }
+    // Non-3D asset (image etc) - show textured plane
+    if (asset && ['png', 'jpg'].includes(asset.format)) {
+      return (
+        <>
+          <mesh
+            ref={meshCallback as any}
+            position={pos}
+            scale={scale}
+            rotation={rotation}
+            onClick={handleClick}
+          >
+            <planeGeometry args={[1, 1]} />
+            <meshStandardMaterial color="#ffffff" side={2} wireframe={isWireframe} />
+          </mesh>
+          {isSelected && (
+            <Html center position={[pos[0], pos[1] + 0.7, pos[2]]} style={{ pointerEvents: 'none' }}>
+              <div style={labelStyle('#3b82f6')}>{obj.name} (image)</div>
+            </Html>
+          )}
+          {gizmoElement}
+        </>
+      );
+    }
   }
 
   // --- Default mesh ---
@@ -286,6 +401,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
           roughness={0.7}
           metalness={0.1}
           side={shape === 'plane' ? 2 : 0}
+          wireframe={isWireframe}
         />
         {selectionOutline}
       </mesh>

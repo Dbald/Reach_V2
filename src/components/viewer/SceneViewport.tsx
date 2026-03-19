@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport, Environment } from '@react-three/drei';
 import { useProjectStore } from '@/store';
+import type { RenderMode } from '@/store/projectStore';
 import { SceneObjects } from './SceneObjects';
 import { ZoneVisualizer } from './ZoneVisualizer';
 import { FirstPersonControls } from './FirstPersonControls';
@@ -12,6 +13,7 @@ export const SceneViewport: React.FC = () => {
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const showGrid = useProjectStore((s) => s.editor.showGrid);
   const viewMode = useProjectStore((s) => s.editor.viewMode);
+  const renderMode = useProjectStore((s) => s.editor.renderMode);
 
   if (!project || !activeSceneId) return null;
 
@@ -27,12 +29,18 @@ export const SceneViewport: React.FC = () => {
         shadows
         style={{ width: '100%', height: '100%' }}
       >
-        {/* Lighting */}
-        <ambientLight
-          intensity={env.ambientLightIntensity}
-          color={`rgb(${Math.round(env.ambientLightColor.r * 255)},${Math.round(env.ambientLightColor.g * 255)},${Math.round(env.ambientLightColor.b * 255)})`}
-        />
-        <directionalLight position={[10, 15, 10]} intensity={0.8} castShadow />
+        {/* Lighting - always present but varies by render mode */}
+        {renderMode === 'unlit' ? (
+          <ambientLight intensity={2} color="#ffffff" />
+        ) : (
+          <>
+            <ambientLight
+              intensity={env.ambientLightIntensity}
+              color={`rgb(${Math.round(env.ambientLightColor.r * 255)},${Math.round(env.ambientLightColor.g * 255)},${Math.round(env.ambientLightColor.b * 255)})`}
+            />
+            <directionalLight position={[10, 15, 10]} intensity={0.8} castShadow />
+          </>
+        )}
 
         {/* Ground plane */}
         {env.groundPlane && env.groundSize && (
@@ -44,6 +52,7 @@ export const SceneViewport: React.FC = () => {
             <planeGeometry args={[env.groundSize.x, env.groundSize.z]} />
             <meshStandardMaterial
               color={env.groundColor ? `rgb(${Math.round(env.groundColor.r * 255)},${Math.round(env.groundColor.g * 255)},${Math.round(env.groundColor.b * 255)})` : '#8ca67a'}
+              wireframe={renderMode === 'wireframe'}
             />
           </mesh>
         )}
@@ -68,7 +77,7 @@ export const SceneViewport: React.FC = () => {
         <GroundInteraction />
 
         {/* Scene objects */}
-        <SceneObjects scene={scene} />
+        <SceneObjects scene={scene} renderMode={renderMode} />
 
         {/* Zone visualization */}
         <ZoneVisualizer scene={scene} />
@@ -100,6 +109,10 @@ export const SceneViewport: React.FC = () => {
         )}
       </Canvas>
 
+      {/* Canvas overlays */}
+      {viewMode === 'editor' && <CanvasToolbar />}
+      {viewMode === 'editor' && <RenderModeSelector />}
+
       {/* View mode indicator */}
       <div style={styles.modeIndicator}>
         {viewMode === 'editor' ? 'Edit Mode' : viewMode === 'preview' ? 'Preview Mode' : 'VR Mode'}
@@ -109,6 +122,69 @@ export const SceneViewport: React.FC = () => {
           Click to look around &middot; WASD to move &middot; Esc to release
         </div>
       )}
+    </div>
+  );
+};
+
+/** Floating transform tool buttons on the canvas */
+const CanvasToolbar: React.FC = () => {
+  const activeTool = useProjectStore((s) => s.editor.activeTool);
+  const setActiveTool = useProjectStore((s) => s.setActiveTool);
+  const selectedObjectId = useProjectStore((s) => s.editor.selectedObjectId);
+
+  if (!selectedObjectId) return null;
+
+  const tools = [
+    { id: 'move' as const, label: 'Move', icon: '\u2725', shortcut: 'G' },
+    { id: 'rotate' as const, label: 'Rotate', icon: '\u21BB', shortcut: 'R' },
+    { id: 'scale' as const, label: 'Scale', icon: '\u2922', shortcut: 'S' },
+  ];
+
+  return (
+    <div style={styles.canvasToolbar}>
+      {tools.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => setActiveTool(t.id)}
+          title={`${t.label} (${t.shortcut})`}
+          style={{
+            ...styles.canvasToolBtn,
+            ...(activeTool === t.id ? styles.canvasToolBtnActive : {}),
+          }}
+        >
+          <span style={styles.canvasToolIcon}>{t.icon}</span>
+          <span style={styles.canvasToolLabel}>{t.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+/** Render mode switcher for lighting debug views */
+const RenderModeSelector: React.FC = () => {
+  const renderMode = useProjectStore((s) => s.editor.renderMode);
+  const setRenderMode = useProjectStore((s) => s.setRenderMode);
+
+  const modes: { id: RenderMode; label: string }[] = [
+    { id: 'lit', label: 'Lit' },
+    { id: 'unlit', label: 'Unlit' },
+    { id: 'wireframe', label: 'Wire' },
+  ];
+
+  return (
+    <div style={styles.renderModeBar}>
+      {modes.map((m) => (
+        <button
+          key={m.id}
+          onClick={() => setRenderMode(m.id)}
+          style={{
+            ...styles.renderModeBtn,
+            ...(renderMode === m.id ? styles.renderModeBtnActive : {}),
+          }}
+        >
+          {m.label}
+        </button>
+      ))}
     </div>
   );
 };
@@ -140,6 +216,7 @@ const GroundInteraction: React.FC = () => {
   const selectObject = useProjectStore((s) => s.selectObject);
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const placementType = useProjectStore((s) => s.editor.placementType);
+  const placementSettings = useProjectStore((s) => s.editor.placementSettings);
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const addZone = useProjectStore((s) => s.addZone);
   const addObject = useProjectStore((s) => s.addObject);
@@ -147,11 +224,24 @@ const GroundInteraction: React.FC = () => {
 
   const isPlacing = activeTool === 'place' && placementType && placementType !== 'sky';
 
-  const placementDefaults: Record<string, { type: any; name: string; yOffset: number; tags: string[]; metadata?: Record<string, unknown> }> = {
+  const buildMetadata = (): Record<string, unknown> => {
+    if (!placementType) return {};
+    switch (placementType) {
+      case 'object': return { shape: placementSettings.shape ?? 'box' };
+      case 'light': return { lightType: placementSettings.lightType ?? 'point', intensity: placementSettings.intensity ?? 1, color: placementSettings.color ?? '#ffffff' };
+      case 'text': return { text: placementSettings.text ?? 'Hello', fontSize: placementSettings.fontSize ?? 0.4 };
+      case 'video': return { url: placementSettings.url ?? '', autoplay: false };
+      case 'audio': return { url: placementSettings.url ?? '', loop: placementSettings.loop ?? true, volume: placementSettings.volume ?? 1, spatial: true };
+      case 'camera': return { fov: 60, isEntry: false };
+      default: return {};
+    }
+  };
+
+  const placementDefaults: Record<string, { type: any; name: string; yOffset: number; tags: string[] }> = {
     object: { type: 'mesh', name: 'Object', yOffset: 0.5, tags: [] },
     light:  { type: 'light', name: 'Light', yOffset: 2, tags: [] },
     camera: { type: 'camera', name: 'Camera', yOffset: 1.7, tags: [] },
-    text:   { type: 'text', name: 'Text', yOffset: 1.5, tags: [], metadata: { text: 'Hello', fontSize: 0.4 } },
+    text:   { type: 'text', name: 'Text', yOffset: 1.5, tags: [] },
     video:  { type: 'video', name: 'Video', yOffset: 1.5, tags: [] },
     audio:  { type: 'audio', name: 'Audio', yOffset: 1, tags: [] },
   };
@@ -193,7 +283,7 @@ const GroundInteraction: React.FC = () => {
             return;
           }
 
-          // Legacy zone tool (keyboard shortcut Z still works)
+          // Legacy zone tool
           if (activeTool === 'zone') {
             const zoneCount = Object.keys(
               useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
@@ -216,15 +306,16 @@ const GroundInteraction: React.FC = () => {
             if (!def) return;
             const scene = useProjectStore.getState().project?.scenes[activeSceneId];
             const count = scene ? Object.values(scene.objects).filter((o) => o.type === def.type).length : 0;
+            const customName = placementSettings.name as string;
             const id = addObject(activeSceneId, def.type, {
-              name: `${def.name} ${count + 1}`,
+              name: customName || `${def.name} ${count + 1}`,
               transform: {
                 position: { x: snappedX, y: def.yOffset, z: snappedZ },
                 rotation: { x: 0, y: 0, z: 0, w: 1 },
                 scale: { x: 1, y: 1, z: 1 },
               },
               tags: def.tags,
-              metadata: def.metadata ?? {},
+              metadata: buildMetadata(),
             });
             selectObject(id);
             return;
@@ -266,5 +357,70 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     pointerEvents: 'none',
     whiteSpace: 'nowrap',
+  },
+  // Canvas transform toolbar
+  canvasToolbar: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    display: 'flex',
+    gap: 4,
+    padding: 4,
+    borderRadius: 8,
+    background: 'rgba(15, 23, 42, 0.9)',
+    border: '1px solid rgba(51, 65, 85, 0.6)',
+    backdropFilter: 'blur(8px)',
+  },
+  canvasToolBtn: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: 2,
+    padding: '6px 12px',
+    borderRadius: 6,
+    border: 'none',
+    background: 'transparent',
+    color: '#94a3b8',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  canvasToolBtnActive: {
+    background: '#3b82f6',
+    color: '#fff',
+  },
+  canvasToolIcon: {
+    fontSize: 16,
+    lineHeight: 1,
+  },
+  canvasToolLabel: {
+    fontSize: 9,
+    fontWeight: 500,
+  },
+  // Render mode selector
+  renderModeBar: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    display: 'flex',
+    gap: 2,
+    padding: 3,
+    borderRadius: 6,
+    background: 'rgba(15, 23, 42, 0.9)',
+    border: '1px solid rgba(51, 65, 85, 0.6)',
+    backdropFilter: 'blur(8px)',
+  },
+  renderModeBtn: {
+    padding: '4px 10px',
+    borderRadius: 4,
+    border: 'none',
+    background: 'transparent',
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
+  renderModeBtnActive: {
+    background: '#334155',
+    color: '#fff',
   },
 };

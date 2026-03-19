@@ -74,6 +74,7 @@ const PlacementSettings: React.FC<{ type: Exclude<PlacementType, 'sky' | 'zone' 
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const addObject = useProjectStore((s) => s.addObject);
   const selectObject = useProjectStore((s) => s.selectObject);
+  const setPlacementSettings = useProjectStore((s) => s.setPlacementSettings);
 
   // Shared
   const [name, setName] = useState('');
@@ -92,6 +93,19 @@ const PlacementSettings: React.FC<{ type: Exclude<PlacementType, 'sky' | 'zone' 
   const [audioUrl, setAudioUrl] = useState('');
   const [loop, setLoop] = useState(true);
   const [volume, setVolume] = useState(1);
+
+  // Sync settings to store so GroundInteraction can read them
+  React.useEffect(() => {
+    const settings: Record<string, unknown> = { name };
+    switch (type) {
+      case 'object': settings.shape = shape; break;
+      case 'light': Object.assign(settings, { lightType, intensity, color }); break;
+      case 'text': Object.assign(settings, { text, fontSize }); break;
+      case 'video': settings.url = videoUrl; break;
+      case 'audio': Object.assign(settings, { url: audioUrl, loop, volume }); break;
+    }
+    setPlacementSettings(settings);
+  }, [type, name, shape, lightType, intensity, color, text, fontSize, videoUrl, audioUrl, loop, volume, setPlacementSettings]);
 
   const getDefaults = () => {
     const base = {

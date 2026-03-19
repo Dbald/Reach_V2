@@ -6,13 +6,10 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 
 const tools = [
   { id: 'select' as const, label: 'Select', shortcut: 'V' },
-  { id: 'move' as const, label: 'Move', shortcut: 'G' },
-  { id: 'rotate' as const, label: 'Rotate', shortcut: 'R' },
-  { id: 'scale' as const, label: 'Scale', shortcut: 'S' },
   { id: 'place' as const, label: 'Add', shortcut: 'P' },
 ] as const;
 
-const shortcutMap: Record<string, typeof tools[number]['id']> = {
+const shortcutMap: Record<string, 'select' | 'move' | 'rotate' | 'scale' | 'place'> = {
   v: 'select',
   g: 'move',
   r: 'rotate',
