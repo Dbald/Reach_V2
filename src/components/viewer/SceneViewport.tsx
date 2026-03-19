@@ -84,7 +84,19 @@ export const SceneViewport: React.FC = () => {
         {viewMode === 'preview' && <FirstPersonControls />}
 
         {/* Environment/skybox */}
-        <Environment preset="sunset" background={false} />
+        <Environment preset={(env.skybox as any) || 'sunset'} background={!!env.skybox} />
+
+        {/* Fog */}
+        {env.fogEnabled && env.fogColor && (
+          <fog attach="fog" args={[
+            `rgb(${Math.round(env.fogColor.r * 255)},${Math.round(env.fogColor.g * 255)},${Math.round(env.fogColor.b * 255)})`,
+            env.fogNear ?? 10,
+            env.fogFar ?? 50,
+          ]} />
+        )}
+        {env.fogEnabled && !env.fogColor && (
+          <fog attach="fog" args={['#94a3b8', env.fogNear ?? 10, env.fogFar ?? 50]} />
+        )}
       </Canvas>
 
       {/* View mode indicator */}
@@ -104,9 +116,19 @@ export const SceneViewport: React.FC = () => {
 const GroundInteraction: React.FC = () => {
   const selectObject = useProjectStore((s) => s.selectObject);
   const activeTool = useProjectStore((s) => s.editor.activeTool);
+  const placementType = useProjectStore((s) => s.editor.placementType);
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const addZone = useProjectStore((s) => s.addZone);
   const addObject = useProjectStore((s) => s.addObject);
+
+  const placementDefaults: Record<string, { type: any; name: string; yOffset: number; tags: string[]; metadata?: Record<string, unknown> }> = {
+    object: { type: 'mesh', name: 'Object', yOffset: 0.5, tags: [] },
+    light:  { type: 'light', name: 'Light', yOffset: 2, tags: [] },
+    camera: { type: 'camera', name: 'Camera', yOffset: 1.7, tags: [] },
+    text:   { type: 'text', name: 'Text', yOffset: 1.5, tags: [], metadata: { text: 'Hello' } },
+    video:  { type: 'video', name: 'Video', yOffset: 1.5, tags: [] },
+    audio:  { type: 'audio', name: 'Audio', yOffset: 1, tags: [] },
+  };
 
   return (
     <mesh
@@ -135,18 +157,20 @@ const GroundInteraction: React.FC = () => {
           return;
         }
 
-        if (activeTool === 'place') {
-          const objCount = Object.keys(
-            useProjectStore.getState().project?.scenes[activeSceneId]?.objects ?? {}
-          ).length;
-          const id = addObject(activeSceneId, 'mesh', {
-            name: `Object ${objCount + 1}`,
+        if (activeTool === 'place' && placementType && placementType !== 'sky') {
+          const def = placementDefaults[placementType];
+          if (!def) return;
+          const scene = useProjectStore.getState().project?.scenes[activeSceneId];
+          const count = scene ? Object.values(scene.objects).filter((o) => o.type === def.type).length : 0;
+          const id = addObject(activeSceneId, def.type, {
+            name: `${def.name} ${count + 1}`,
             transform: {
-              position: { x: snappedX, y: 0.5, z: snappedZ },
+              position: { x: snappedX, y: def.yOffset, z: snappedZ },
               rotation: { x: 0, y: 0, z: 0, w: 1 },
               scale: { x: 1, y: 1, z: 1 },
             },
-            tags: [],
+            tags: def.tags,
+            metadata: def.metadata ?? {},
           });
           selectObject(id);
           return;

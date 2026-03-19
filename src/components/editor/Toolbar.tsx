@@ -6,7 +6,7 @@ const tools = [
   { id: 'move' as const, label: 'Move', shortcut: 'G' },
   { id: 'rotate' as const, label: 'Rotate', shortcut: 'R' },
   { id: 'scale' as const, label: 'Scale', shortcut: 'S' },
-  { id: 'place' as const, label: 'Place', shortcut: 'P' },
+  { id: 'place' as const, label: 'Add', shortcut: 'P' },
   { id: 'zone' as const, label: 'Zone', shortcut: 'Z' },
 ] as const;
 

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { TransformControls } from '@react-three/drei';
+import { TransformControls, Html, Text as DreiText } from '@react-three/drei';
 import { useProjectStore } from '@/store';
 import type { Scene, SceneObject } from '@/types';
 
@@ -42,7 +42,6 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
   const gizmoMode = toolToMode(activeTool);
   const showGizmo = isSelected && gizmoMode !== null && meshReady;
 
-  // Track when mesh ref is available
   const meshCallback = useCallback((node: THREE.Mesh | null) => {
     (meshRef as any).current = node;
     setMeshReady(!!node);
@@ -64,11 +63,9 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
     obj.transform.rotation.z,
   ];
 
-  // Sync transform back to store when gizmo drag ends
   useEffect(() => {
     const controls = transformRef.current;
     if (!controls) return;
-
     const handleChange = () => {
       if (!meshRef.current) return;
       const m = meshRef.current;
@@ -78,11 +75,8 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
         scale: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
       });
     };
-
     controls.addEventListener('mouseUp', handleChange);
-    return () => {
-      controls.removeEventListener('mouseUp', handleChange);
-    };
+    return () => controls.removeEventListener('mouseUp', handleChange);
   }, [showGizmo, sceneId, obj.id, setObjectTransform]);
 
   const handleClick = (e: any) => {
@@ -106,30 +100,162 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
     if (obj.tags.includes('stage')) return '#5a5a5a';
     if (obj.tags.includes('entrance') || obj.tags.includes('signage')) return '#cc8844';
     if (obj.type === 'light') return '#ffe066';
-    if (obj.type === 'label') return '#66aaff';
+    if (obj.type === 'label' || obj.type === 'text') return '#66aaff';
+    if (obj.type === 'video') return '#a855f7';
+    if (obj.type === 'audio') return '#f97316';
+    if (obj.type === 'camera') return '#06b6d4';
     return '#6b7280';
   };
 
+  const gizmoElement = showGizmo && meshRef.current ? (
+    <TransformControls
+      ref={transformRef}
+      object={meshRef.current}
+      mode={gizmoMode!}
+      size={0.75}
+    />
+  ) : null;
+
+  const selectionOutline = isSelected ? (
+    <lineSegments>
+      <edgesGeometry args={[new THREE.BoxGeometry(1.02, 1.02, 1.02)]} />
+      <lineBasicMaterial color="#3b82f6" linewidth={2} />
+    </lineSegments>
+  ) : null;
+
+  // --- Light ---
   if (obj.type === 'light') {
     return (
       <group position={pos}>
         <pointLight intensity={1} distance={10} color="#fff5e0" />
         <mesh ref={meshCallback as any} scale={scale} onClick={handleClick}>
-          <sphereGeometry args={[0.15, 16, 16]} />
+          <sphereGeometry args={[0.2, 16, 16]} />
           <meshBasicMaterial color="#ffe066" />
         </mesh>
-        {showGizmo && meshRef.current && (
-          <TransformControls
-            ref={transformRef}
-            object={meshRef.current}
-            mode={gizmoMode!}
-            size={0.75}
-          />
+        {isSelected && (
+          <Html center style={{ pointerEvents: 'none' }}>
+            <div style={labelStyle('#ffe066')}>Light</div>
+          </Html>
         )}
+        {gizmoElement}
       </group>
     );
   }
 
+  // --- Camera ---
+  if (obj.type === 'camera') {
+    return (
+      <>
+        <group position={pos} rotation={rotation}>
+          <mesh ref={meshCallback as any} scale={scale} onClick={handleClick}>
+            <coneGeometry args={[0.2, 0.4, 4]} />
+            <meshStandardMaterial color="#06b6d4" roughness={0.5} />
+          </mesh>
+          {/* Lens indicator */}
+          <mesh position={[0, -0.25, 0]}>
+            <cylinderGeometry args={[0.08, 0.12, 0.1, 16]} />
+            <meshBasicMaterial color="#0891b2" />
+          </mesh>
+          {isSelected && (
+            <Html center position={[0, 0.5, 0]} style={{ pointerEvents: 'none' }}>
+              <div style={labelStyle('#06b6d4')}>{obj.name}</div>
+            </Html>
+          )}
+        </group>
+        {gizmoElement}
+      </>
+    );
+  }
+
+  // --- Text ---
+  if (obj.type === 'text' || obj.type === 'label') {
+    const displayText = (obj.metadata?.text as string) || obj.name;
+    return (
+      <>
+        <group position={pos} rotation={rotation}>
+          <DreiText
+            ref={meshCallback as any}
+            fontSize={0.4}
+            color="#e2e8f0"
+            anchorX="center"
+            anchorY="middle"
+            onClick={handleClick}
+          >
+            {displayText}
+          </DreiText>
+          {isSelected && (
+            <mesh position={[0, 0, -0.05]} scale={[displayText.length * 0.25 + 0.4, 0.6, 0.05]}>
+              <boxGeometry />
+              <meshBasicMaterial color="#3b82f6" transparent opacity={0.15} />
+            </mesh>
+          )}
+        </group>
+        {gizmoElement}
+      </>
+    );
+  }
+
+  // --- Video ---
+  if (obj.type === 'video') {
+    return (
+      <>
+        <mesh
+          ref={meshCallback as any}
+          position={pos}
+          scale={[scale[0] * 1.6, scale[1] * 0.9, 0.05]}
+          rotation={rotation}
+          onClick={handleClick}
+          castShadow
+        >
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#1a1a2e" roughness={0.3} metalness={0.6} />
+          {selectionOutline}
+        </mesh>
+        {/* Play icon overlay */}
+        <group position={[pos[0], pos[1], pos[2] + 0.03]}>
+          <mesh rotation={[0, 0, -Math.PI / 2]}>
+            <coneGeometry args={[0.15, 0.25, 3]} />
+            <meshBasicMaterial color="#a855f7" transparent opacity={0.8} />
+          </mesh>
+        </group>
+        {isSelected && (
+          <Html center position={[pos[0], pos[1] + scale[1] * 0.55, pos[2]]} style={{ pointerEvents: 'none' }}>
+            <div style={labelStyle('#a855f7')}>{obj.name}</div>
+          </Html>
+        )}
+        {gizmoElement}
+      </>
+    );
+  }
+
+  // --- Audio ---
+  if (obj.type === 'audio') {
+    return (
+      <>
+        <group position={pos}>
+          <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick}>
+            <sphereGeometry args={[1, 16, 16]} />
+            <meshStandardMaterial color="#f97316" roughness={0.4} />
+          </mesh>
+          {/* Sound wave rings */}
+          {[0.5, 0.8, 1.1].map((r, i) => (
+            <mesh key={i} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[r, 0.01, 8, 32]} />
+              <meshBasicMaterial color="#f97316" transparent opacity={0.3 - i * 0.08} />
+            </mesh>
+          ))}
+          {isSelected && (
+            <Html center position={[0, 0.5, 0]} style={{ pointerEvents: 'none' }}>
+              <div style={labelStyle('#f97316')}>{obj.name}</div>
+            </Html>
+          )}
+        </group>
+        {gizmoElement}
+      </>
+    );
+  }
+
+  // --- Default mesh ---
   return (
     <>
       <mesh
@@ -149,21 +275,20 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
           roughness={0.7}
           metalness={0.1}
         />
-        {isSelected && (
-          <lineSegments>
-            <edgesGeometry args={[new THREE.BoxGeometry(1.02, 1.02, 1.02)]} />
-            <lineBasicMaterial color="#3b82f6" linewidth={2} />
-          </lineSegments>
-        )}
+        {selectionOutline}
       </mesh>
-      {showGizmo && meshRef.current && (
-        <TransformControls
-          ref={transformRef}
-          object={meshRef.current}
-          mode={gizmoMode!}
-          size={0.75}
-        />
-      )}
+      {gizmoElement}
     </>
   );
 };
+
+const labelStyle = (color: string): React.CSSProperties => ({
+  background: 'rgba(15, 23, 42, 0.85)',
+  color,
+  padding: '2px 8px',
+  borderRadius: 4,
+  fontSize: 10,
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+  border: `1px solid ${color}33`,
+});

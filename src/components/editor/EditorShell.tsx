@@ -11,6 +11,7 @@ import { SceneHierarchy } from './SceneHierarchy';
 import { PropertyInspector } from './PropertyInspector';
 import { AssetTray } from './AssetTray';
 import { PublishPanel } from './PublishPanel';
+import { AddPanel } from './AddPanel';
 import { SceneViewport } from '@/components/viewer/SceneViewport';
 import { XRViewer } from '@/components/viewer/XRViewer';
 
@@ -29,6 +30,7 @@ export const EditorShell: React.FC = () => {
   return (
     <div style={styles.shell}>
       <Toolbar />
+      <AddPanel />
       <div style={styles.body}>
         <SceneHierarchy />
         <div style={styles.center}>

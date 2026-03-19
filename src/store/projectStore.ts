@@ -15,10 +15,13 @@ import type {
 } from '@/types';
 import { createProject, defaultTransform } from '@/utils/defaults';
 
+export type PlacementType = 'object' | 'light' | 'camera' | 'text' | 'video' | 'audio' | 'sky' | null;
+
 interface EditorState {
   selectedObjectId: string | null;
   activeSceneId: string | null;
   activeTool: 'select' | 'move' | 'rotate' | 'scale' | 'place' | 'zone';
+  placementType: PlacementType;
   viewMode: 'editor' | 'preview' | 'vr';
   showGrid: boolean;
   showHierarchy: boolean;
@@ -67,6 +70,7 @@ interface ProjectStore {
   selectObject: (objectId: string | null) => void;
   setActiveScene: (sceneId: string) => void;
   setActiveTool: (tool: EditorState['activeTool']) => void;
+  setPlacementType: (type: PlacementType) => void;
   setViewMode: (mode: EditorState['viewMode']) => void;
   togglePanel: (panel: 'showHierarchy' | 'showInspector' | 'showAssetTray') => void;
 
@@ -78,6 +82,7 @@ const defaultEditorState: EditorState = {
   selectedObjectId: null,
   activeSceneId: null,
   activeTool: 'select',
+  placementType: null,
   viewMode: 'editor',
   showGrid: true,
   showHierarchy: true,
@@ -312,6 +317,18 @@ export const useProjectStore = create<ProjectStore>()(
     setActiveTool: (tool) => {
       set((state) => {
         state.editor.activeTool = tool;
+        if (tool !== 'place') {
+          state.editor.placementType = null;
+        }
+      });
+    },
+
+    setPlacementType: (type) => {
+      set((state) => {
+        state.editor.placementType = type;
+        if (type) {
+          state.editor.activeTool = 'place';
+        }
       });
     },
 

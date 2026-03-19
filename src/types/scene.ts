@@ -59,7 +59,10 @@ export type SceneObjectType =
   | 'zone'
   | 'boundary'
   | 'label'
-  | 'navpoint';
+  | 'navpoint'
+  | 'video'
+  | 'audio'
+  | 'text';
 
 export interface MaterialConfig {
   color?: Color;
