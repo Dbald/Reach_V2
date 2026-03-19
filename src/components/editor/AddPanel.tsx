@@ -11,6 +11,7 @@ const categories: { id: PlacementType; label: string; desc: string; icon: string
   { id: 'light',  label: 'Light',   desc: 'Point, spot, or area',     icon: '\u2736' },
   { id: 'text',   label: 'Text',    desc: '3D text label',            icon: 'T' },
   { id: 'camera', label: 'Camera',  desc: 'Viewpoint / spawn point',  icon: '\u25CE' },
+  { id: 'zone',   label: 'Zone',    desc: 'Walk / collision area',    icon: '\u25A3' },
 ];
 
 const skyPresets = [
@@ -41,7 +42,9 @@ export const AddPanel: React.FC = () => {
 
       {placementType === 'sky' ? (
         <SkySettings onBack={() => setPlacementType(null)} />
-      ) : placementType && placementType !== 'sky' ? (
+      ) : placementType === 'zone' ? (
+        <ZoneSettings onBack={() => setPlacementType(null)} />
+      ) : placementType ? (
         <PlacementSettings type={placementType} onBack={() => setPlacementType(null)} />
       ) : (
         <div style={styles.grid}>
@@ -67,7 +70,7 @@ export const AddPanel: React.FC = () => {
 const lightTypes = ['point', 'spot', 'directional'] as const;
 const objectShapes = ['box', 'sphere', 'cylinder', 'plane'] as const;
 
-const PlacementSettings: React.FC<{ type: Exclude<PlacementType, 'sky' | null>; onBack: () => void }> = ({ type, onBack }) => {
+const PlacementSettings: React.FC<{ type: Exclude<PlacementType, 'sky' | 'zone' | null>; onBack: () => void }> = ({ type, onBack }) => {
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const addObject = useProjectStore((s) => s.addObject);
   const selectObject = useProjectStore((s) => s.selectObject);
@@ -275,6 +278,96 @@ const defaultY: Record<string, number> = {
   text: 1.5,
   video: 1.5,
   audio: 1,
+};
+
+/* ---------- Zone Settings ---------- */
+
+const ZoneSettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
+  const addZone = useProjectStore((s) => s.addZone);
+
+  const [name, setName] = useState('');
+  const [sizeX, setSizeX] = useState(4);
+  const [sizeY, setSizeY] = useState(2.5);
+  const [sizeZ, setSizeZ] = useState(4);
+  const [walkable, setWalkable] = useState(true);
+  const [hasCollision, setHasCollision] = useState(false);
+  const [color, setColor] = useState('#22c55e');
+
+  const handleAddNow = () => {
+    if (!activeSceneId) return;
+    const zoneCount = Object.keys(
+      useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
+    ).length;
+    const zoneName = name || `Zone ${zoneCount + 1}`;
+    const r = parseInt(color.slice(1, 3), 16) / 255;
+    const g = parseInt(color.slice(3, 5), 16) / 255;
+    const b = parseInt(color.slice(5, 7), 16) / 255;
+    addZone(activeSceneId, {
+      name: zoneName,
+      shape: 'box',
+      points: [{ x: 0, y: 0, z: 0 }],
+      size: { x: sizeX, y: sizeY, z: sizeZ },
+      walkable,
+      hasCollision,
+      label: zoneName,
+      color: { r, g, b, a: 0.15 },
+    });
+  };
+
+  return (
+    <div style={styles.settingsPanel}>
+      <button style={styles.backBtn} onClick={onBack}>&larr; Back</button>
+      <div style={styles.catHeader}>
+        <span style={styles.catIcon}>{'\u25A3'}</span>
+        <span style={styles.catLabel}>Zone</span>
+      </div>
+
+      <div style={styles.fieldGroup}>
+        <label style={styles.fieldLabel}>Name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Zone" style={styles.input} />
+      </div>
+
+      <div style={styles.sectionTitle}>Size</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {[
+          { label: 'W', value: sizeX, set: setSizeX },
+          { label: 'H', value: sizeY, set: setSizeY },
+          { label: 'D', value: sizeZ, set: setSizeZ },
+        ].map((s) => (
+          <div key={s.label} style={{ flex: 1 }}>
+            <label style={{ fontSize: 9, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 2 }}>{s.label}</label>
+            <input type="number" step={0.5} min={0.5} value={s.value} onChange={(e) => s.set(parseFloat(e.target.value) || 1)} style={styles.numInput} />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ ...styles.fieldGroup, marginTop: 10 }}>
+        <label style={styles.checkRow}>
+          <input type="checkbox" checked={walkable} onChange={(e) => setWalkable(e.target.checked)} />
+          <span>Walkable</span>
+        </label>
+        <label style={styles.checkRow}>
+          <input type="checkbox" checked={hasCollision} onChange={(e) => setHasCollision(e.target.checked)} />
+          <span>Has Collision</span>
+        </label>
+      </div>
+
+      <div style={styles.fieldGroup}>
+        <label style={styles.fieldLabel}>Color</label>
+        <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={styles.colorInput} />
+      </div>
+
+      <div style={styles.addActions}>
+        <button onClick={handleAddNow} style={styles.addBtn}>
+          Add at Origin
+        </button>
+        <div style={styles.hint}>
+          or click on the ground to place
+        </div>
+      </div>
+    </div>
+  );
 };
 
 /* ---------- Sky Settings ---------- */

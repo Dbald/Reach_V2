@@ -15,7 +15,7 @@ import type {
 } from '@/types';
 import { createProject, defaultTransform } from '@/utils/defaults';
 
-export type PlacementType = 'object' | 'light' | 'camera' | 'text' | 'video' | 'audio' | 'sky' | null;
+export type PlacementType = 'object' | 'light' | 'camera' | 'text' | 'video' | 'audio' | 'sky' | 'zone' | null;
 
 interface EditorState {
   selectedObjectId: string | null;

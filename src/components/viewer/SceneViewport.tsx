@@ -1,5 +1,6 @@
-import React from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { useRef, useState } from 'react';
+import * as THREE from 'three';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport, Environment } from '@react-three/drei';
 import { useProjectStore } from '@/store';
 import { SceneObjects } from './SceneObjects';
@@ -112,6 +113,28 @@ export const SceneViewport: React.FC = () => {
   );
 };
 
+/** Hover feedback ring shown when placement tool is active */
+const PlacementPreview: React.FC<{ hoverPos: THREE.Vector3 | null; placementType: string | null }> = ({ hoverPos, placementType }) => {
+  const ringRef = useRef<THREE.Mesh>(null);
+
+  useFrame(() => {
+    if (ringRef.current && hoverPos) {
+      ringRef.current.position.set(hoverPos.x, 0.02, hoverPos.z);
+    }
+  });
+
+  if (!hoverPos || !placementType) return null;
+
+  const color = placementType === 'zone' ? '#22c55e' : '#3b82f6';
+
+  return (
+    <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.35, 0.45, 32]} />
+      <meshBasicMaterial color={color} transparent opacity={0.6} side={2} />
+    </mesh>
+  );
+};
+
 /** Click on empty space: deselect, place object, or create zone based on active tool */
 const GroundInteraction: React.FC = () => {
   const selectObject = useProjectStore((s) => s.selectObject);
@@ -120,68 +143,100 @@ const GroundInteraction: React.FC = () => {
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const addZone = useProjectStore((s) => s.addZone);
   const addObject = useProjectStore((s) => s.addObject);
+  const [hoverPos, setHoverPos] = useState<THREE.Vector3 | null>(null);
+
+  const isPlacing = activeTool === 'place' && placementType && placementType !== 'sky';
 
   const placementDefaults: Record<string, { type: any; name: string; yOffset: number; tags: string[]; metadata?: Record<string, unknown> }> = {
     object: { type: 'mesh', name: 'Object', yOffset: 0.5, tags: [] },
     light:  { type: 'light', name: 'Light', yOffset: 2, tags: [] },
     camera: { type: 'camera', name: 'Camera', yOffset: 1.7, tags: [] },
-    text:   { type: 'text', name: 'Text', yOffset: 1.5, tags: [], metadata: { text: 'Hello' } },
+    text:   { type: 'text', name: 'Text', yOffset: 1.5, tags: [], metadata: { text: 'Hello', fontSize: 0.4 } },
     video:  { type: 'video', name: 'Video', yOffset: 1.5, tags: [] },
     audio:  { type: 'audio', name: 'Audio', yOffset: 1, tags: [] },
   };
 
   return (
-    <mesh
-      position={[0, -0.05, 0]}
-      rotation={[-Math.PI / 2, 0, 0]}
-      onClick={(e) => {
-        if (!activeSceneId) return;
-        const point = e.point;
-        const snappedX = Math.round(point.x * 2) / 2;
-        const snappedZ = Math.round(point.z * 2) / 2;
+    <>
+      <PlacementPreview hoverPos={isPlacing ? hoverPos : null} placementType={placementType} />
+      <mesh
+        position={[0, -0.05, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        onPointerMove={(e) => {
+          if (isPlacing) {
+            const p = e.point;
+            setHoverPos(new THREE.Vector3(Math.round(p.x * 2) / 2, 0, Math.round(p.z * 2) / 2));
+          }
+        }}
+        onPointerLeave={() => setHoverPos(null)}
+        onClick={(e) => {
+          if (!activeSceneId) return;
+          const point = e.point;
+          const snappedX = Math.round(point.x * 2) / 2;
+          const snappedZ = Math.round(point.z * 2) / 2;
 
-        if (activeTool === 'zone') {
-          const zoneCount = Object.keys(
-            useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
-          ).length;
-          addZone(activeSceneId, {
-            name: `Zone ${zoneCount + 1}`,
-            shape: 'box',
-            points: [{ x: snappedX, y: 0, z: snappedZ }],
-            size: { x: 4, y: 2.5, z: 4 },
-            walkable: true,
-            hasCollision: false,
-            label: `Zone ${zoneCount + 1}`,
-            color: { r: 0.13, g: 0.77, b: 0.37, a: 0.15 },
-          });
-          return;
-        }
+          // Zone placement via Add panel
+          if (activeTool === 'place' && placementType === 'zone') {
+            const zoneCount = Object.keys(
+              useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
+            ).length;
+            addZone(activeSceneId, {
+              name: `Zone ${zoneCount + 1}`,
+              shape: 'box',
+              points: [{ x: snappedX, y: 0, z: snappedZ }],
+              size: { x: 4, y: 2.5, z: 4 },
+              walkable: true,
+              hasCollision: false,
+              label: `Zone ${zoneCount + 1}`,
+              color: { r: 0.13, g: 0.77, b: 0.37, a: 0.15 },
+            });
+            return;
+          }
 
-        if (activeTool === 'place' && placementType && placementType !== 'sky') {
-          const def = placementDefaults[placementType];
-          if (!def) return;
-          const scene = useProjectStore.getState().project?.scenes[activeSceneId];
-          const count = scene ? Object.values(scene.objects).filter((o) => o.type === def.type).length : 0;
-          const id = addObject(activeSceneId, def.type, {
-            name: `${def.name} ${count + 1}`,
-            transform: {
-              position: { x: snappedX, y: def.yOffset, z: snappedZ },
-              rotation: { x: 0, y: 0, z: 0, w: 1 },
-              scale: { x: 1, y: 1, z: 1 },
-            },
-            tags: def.tags,
-            metadata: def.metadata ?? {},
-          });
-          selectObject(id);
-          return;
-        }
+          // Legacy zone tool (keyboard shortcut Z still works)
+          if (activeTool === 'zone') {
+            const zoneCount = Object.keys(
+              useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
+            ).length;
+            addZone(activeSceneId, {
+              name: `Zone ${zoneCount + 1}`,
+              shape: 'box',
+              points: [{ x: snappedX, y: 0, z: snappedZ }],
+              size: { x: 4, y: 2.5, z: 4 },
+              walkable: true,
+              hasCollision: false,
+              label: `Zone ${zoneCount + 1}`,
+              color: { r: 0.13, g: 0.77, b: 0.37, a: 0.15 },
+            });
+            return;
+          }
 
-        selectObject(null);
-      }}
-    >
-      <planeGeometry args={[500, 500]} />
-      <meshBasicMaterial visible={false} />
-    </mesh>
+          if (activeTool === 'place' && placementType && placementType !== 'sky') {
+            const def = placementDefaults[placementType];
+            if (!def) return;
+            const scene = useProjectStore.getState().project?.scenes[activeSceneId];
+            const count = scene ? Object.values(scene.objects).filter((o) => o.type === def.type).length : 0;
+            const id = addObject(activeSceneId, def.type, {
+              name: `${def.name} ${count + 1}`,
+              transform: {
+                position: { x: snappedX, y: def.yOffset, z: snappedZ },
+                rotation: { x: 0, y: 0, z: 0, w: 1 },
+                scale: { x: 1, y: 1, z: 1 },
+              },
+              tags: def.tags,
+              metadata: def.metadata ?? {},
+            });
+            selectObject(id);
+            return;
+          }
+
+          selectObject(null);
+        }}
+      >
+        <planeGeometry args={[500, 500]} />
+        <meshBasicMaterial visible={false} />
+      </mesh>
+    </>
   );
 };
 

@@ -170,12 +170,13 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
   // --- Text ---
   if (obj.type === 'text' || obj.type === 'label') {
     const displayText = (obj.metadata?.text as string) || obj.name;
+    const textSize = (obj.metadata?.fontSize as number) || 0.4;
     return (
       <>
         <group position={pos} rotation={rotation}>
           <DreiText
             ref={meshCallback as any}
-            fontSize={0.4}
+            fontSize={textSize}
             color="#e2e8f0"
             anchorX="center"
             anchorY="middle"
@@ -256,6 +257,16 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
   }
 
   // --- Default mesh ---
+  const shape = (obj.metadata?.shape as string) || 'box';
+  const renderGeometry = () => {
+    switch (shape) {
+      case 'sphere': return <sphereGeometry args={[0.5, 32, 32]} />;
+      case 'cylinder': return <cylinderGeometry args={[0.5, 0.5, 1, 32]} />;
+      case 'plane': return <planeGeometry args={[1, 1]} />;
+      default: return <boxGeometry args={[1, 1, 1]} />;
+    }
+  };
+
   return (
     <>
       <mesh
@@ -267,13 +278,14 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string }> = ({ o
         castShadow
         receiveShadow
       >
-        <boxGeometry args={[1, 1, 1]} />
+        {renderGeometry()}
         <meshStandardMaterial
           color={getColor()}
           transparent={isSelected}
           opacity={isSelected ? 0.85 : 1}
           roughness={0.7}
           metalness={0.1}
+          side={shape === 'plane' ? 2 : 0}
         />
         {selectionOutline}
       </mesh>

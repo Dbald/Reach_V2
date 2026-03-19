@@ -10,7 +10,6 @@ const tools = [
   { id: 'rotate' as const, label: 'Rotate', shortcut: 'R' },
   { id: 'scale' as const, label: 'Scale', shortcut: 'S' },
   { id: 'place' as const, label: 'Add', shortcut: 'P' },
-  { id: 'zone' as const, label: 'Zone', shortcut: 'Z' },
 ] as const;
 
 const shortcutMap: Record<string, typeof tools[number]['id']> = {
@@ -19,7 +18,6 @@ const shortcutMap: Record<string, typeof tools[number]['id']> = {
   r: 'rotate',
   s: 'scale',
   p: 'place',
-  z: 'zone',
 };
 
 export const Toolbar: React.FC = () => {
