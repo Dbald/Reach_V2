@@ -4,6 +4,7 @@ import { OrbitControls, Grid, GizmoHelper, GizmoViewport, Environment } from '@r
 import { useProjectStore } from '@/store';
 import { SceneObjects } from './SceneObjects';
 import { ZoneVisualizer } from './ZoneVisualizer';
+import { FirstPersonControls } from './FirstPersonControls';
 
 export const SceneViewport: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -62,8 +63,8 @@ export const SceneViewport: React.FC = () => {
           />
         )}
 
-        {/* Background click to deselect */}
-        <DeselectOnMiss />
+        {/* Ground click: deselect / place / zone */}
+        <GroundInteraction />
 
         {/* Scene objects */}
         <SceneObjects scene={scene} />
@@ -80,6 +81,7 @@ export const SceneViewport: React.FC = () => {
             </GizmoHelper>
           </>
         )}
+        {viewMode === 'preview' && <FirstPersonControls />}
 
         {/* Environment/skybox */}
         <Environment preset="sunset" background={false} />
@@ -89,34 +91,67 @@ export const SceneViewport: React.FC = () => {
       <div style={styles.modeIndicator}>
         {viewMode === 'editor' ? 'Edit Mode' : viewMode === 'preview' ? 'Preview Mode' : 'VR Mode'}
       </div>
+      {viewMode === 'preview' && (
+        <div style={styles.previewHint}>
+          Click to look around &middot; WASD to move &middot; Esc to release
+        </div>
+      )}
     </div>
   );
 };
 
-/** Click on empty space to deselect, or place a zone if zone tool is active */
-const DeselectOnMiss: React.FC = () => {
+/** Click on empty space: deselect, place object, or create zone based on active tool */
+const GroundInteraction: React.FC = () => {
   const selectObject = useProjectStore((s) => s.selectObject);
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const addZone = useProjectStore((s) => s.addZone);
+  const addObject = useProjectStore((s) => s.addObject);
 
   return (
     <mesh
       position={[0, -0.05, 0]}
       rotation={[-Math.PI / 2, 0, 0]}
       onClick={(e) => {
-        if (activeTool === 'zone' && activeSceneId) {
-          const point = e.point;
+        if (!activeSceneId) return;
+        const point = e.point;
+        const snappedX = Math.round(point.x * 2) / 2;
+        const snappedZ = Math.round(point.z * 2) / 2;
+
+        if (activeTool === 'zone') {
+          const zoneCount = Object.keys(
+            useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
+          ).length;
           addZone(activeSceneId, {
-            name: `Zone`,
+            name: `Zone ${zoneCount + 1}`,
             shape: 'box',
-            points: [{ x: point.x, y: 0, z: point.z }],
-            size: { x: 3, y: 2, z: 3 },
+            points: [{ x: snappedX, y: 0, z: snappedZ }],
+            size: { x: 4, y: 2.5, z: 4 },
             walkable: true,
             hasCollision: false,
+            label: `Zone ${zoneCount + 1}`,
+            color: { r: 0.13, g: 0.77, b: 0.37, a: 0.15 },
           });
           return;
         }
+
+        if (activeTool === 'place') {
+          const objCount = Object.keys(
+            useProjectStore.getState().project?.scenes[activeSceneId]?.objects ?? {}
+          ).length;
+          const id = addObject(activeSceneId, 'mesh', {
+            name: `Object ${objCount + 1}`,
+            transform: {
+              position: { x: snappedX, y: 0.5, z: snappedZ },
+              rotation: { x: 0, y: 0, z: 0, w: 1 },
+              scale: { x: 1, y: 1, z: 1 },
+            },
+            tags: [],
+          });
+          selectObject(id);
+          return;
+        }
+
         selectObject(null);
       }}
     >
@@ -138,5 +173,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     fontWeight: 500,
     pointerEvents: 'none',
+  },
+  previewHint: {
+    position: 'absolute',
+    bottom: 16,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    padding: '6px 16px',
+    borderRadius: 6,
+    background: 'rgba(15, 23, 42, 0.85)',
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: 500,
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap',
   },
 };

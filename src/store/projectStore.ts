@@ -26,11 +26,20 @@ interface EditorState {
   showAssetTray: boolean;
 }
 
+const MAX_UNDO = 50;
+
 interface ProjectStore {
   // State
   project: Project | null;
   editor: EditorState;
   validationReport: ValidationReport | null;
+
+  // Undo / redo
+  _undoStack: string[];
+  _redoStack: string[];
+  undo: () => void;
+  redo: () => void;
+  _pushUndo: () => void;
 
   // Project actions
   createNewProject: (name: string, template: TemplateType) => void;
@@ -77,10 +86,48 @@ const defaultEditorState: EditorState = {
 };
 
 export const useProjectStore = create<ProjectStore>()(
-  immer((set) => ({
+  immer((set, get) => ({
     project: null,
     editor: defaultEditorState,
     validationReport: null,
+    _undoStack: [],
+    _redoStack: [],
+
+    _pushUndo: () => {
+      const { project } = get();
+      if (!project) return;
+      set((state) => {
+        state._undoStack.push(JSON.stringify(project));
+        if (state._undoStack.length > MAX_UNDO) {
+          state._undoStack.shift();
+        }
+        state._redoStack = [];
+      });
+    },
+
+    undo: () => {
+      const { _undoStack, project } = get();
+      if (_undoStack.length === 0) return;
+      set((state) => {
+        const snapshot = state._undoStack.pop()!;
+        if (state.project) {
+          state._redoStack.push(JSON.stringify(state.project));
+        }
+        state.project = JSON.parse(snapshot);
+      });
+    },
+
+    redo: () => {
+      const { _redoStack, project } = get();
+      if (_redoStack.length === 0) return;
+      set((state) => {
+        const snapshot = state._redoStack.pop()!;
+        if (state.project) {
+          state._undoStack.push(JSON.stringify(state.project));
+        }
+        state.project = JSON.parse(snapshot);
+      });
+    },
 
     createNewProject: (name, template) => {
       set((state) => {
@@ -90,10 +137,13 @@ export const useProjectStore = create<ProjectStore>()(
         state.editor.activeSceneId = firstSceneId;
         state.editor.selectedObjectId = null;
         state.validationReport = null;
+        state._undoStack = [];
+        state._redoStack = [];
       });
     },
 
     updateProjectName: (name) => {
+      get()._pushUndo();
       set((state) => {
         if (state.project) {
           state.project.name = name;
@@ -104,6 +154,7 @@ export const useProjectStore = create<ProjectStore>()(
 
     addObject: (sceneId, type, props) => {
       const id = uuid();
+      get()._pushUndo();
       set((state) => {
         const scene = state.project?.scenes[sceneId];
         if (!scene) return;
@@ -127,6 +178,7 @@ export const useProjectStore = create<ProjectStore>()(
     },
 
     updateObject: (sceneId, objectId, updates) => {
+      get()._pushUndo();
       set((state) => {
         const obj = state.project?.scenes[sceneId]?.objects[objectId];
         if (!obj) return;
@@ -136,11 +188,11 @@ export const useProjectStore = create<ProjectStore>()(
     },
 
     deleteObject: (sceneId, objectId) => {
+      get()._pushUndo();
       set((state) => {
         const scene = state.project?.scenes[sceneId];
         if (!scene) return;
         delete scene.objects[objectId];
-        // Remove children
         for (const [id, obj] of Object.entries(scene.objects)) {
           if (obj.parentId === objectId) {
             delete scene.objects[id];
@@ -155,6 +207,7 @@ export const useProjectStore = create<ProjectStore>()(
 
     duplicateObject: (sceneId, objectId) => {
       let newId: string | null = null;
+      get()._pushUndo();
       set((state) => {
         const scene = state.project?.scenes[sceneId];
         const original = scene?.objects[objectId];
@@ -179,6 +232,7 @@ export const useProjectStore = create<ProjectStore>()(
     },
 
     setObjectTransform: (sceneId, objectId, transform) => {
+      get()._pushUndo();
       set((state) => {
         const obj = state.project?.scenes[sceneId]?.objects[objectId];
         if (obj) obj.transform = transform;
@@ -186,6 +240,7 @@ export const useProjectStore = create<ProjectStore>()(
     },
 
     setObjectMaterial: (sceneId, objectId, material) => {
+      get()._pushUndo();
       set((state) => {
         const obj = state.project?.scenes[sceneId]?.objects[objectId];
         if (obj) obj.material = material;
@@ -194,6 +249,7 @@ export const useProjectStore = create<ProjectStore>()(
 
     addZone: (sceneId, zone) => {
       const id = uuid();
+      get()._pushUndo();
       set((state) => {
         const scene = state.project?.scenes[sceneId];
         if (!scene) return;
@@ -204,6 +260,7 @@ export const useProjectStore = create<ProjectStore>()(
     },
 
     updateZone: (sceneId, zoneId, updates) => {
+      get()._pushUndo();
       set((state) => {
         const zone = state.project?.scenes[sceneId]?.zones[zoneId];
         if (zone) Object.assign(zone, updates);
@@ -211,6 +268,7 @@ export const useProjectStore = create<ProjectStore>()(
     },
 
     deleteZone: (sceneId, zoneId) => {
+      get()._pushUndo();
       set((state) => {
         const scene = state.project?.scenes[sceneId];
         if (scene) delete scene.zones[zoneId];

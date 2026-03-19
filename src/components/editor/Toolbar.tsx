@@ -25,11 +25,32 @@ export const Toolbar: React.FC = () => {
   const viewMode = useProjectStore((s) => s.editor.viewMode);
   const setViewMode = useProjectStore((s) => s.setViewMode);
   const projectName = useProjectStore((s) => s.project?.name ?? 'Untitled');
+  const undo = useProjectStore((s) => s.undo);
+  const redo = useProjectStore((s) => s.redo);
+  const undoAvailable = useProjectStore((s) => s._undoStack.length > 0);
+  const redoAvailable = useProjectStore((s) => s._redoStack.length > 0);
 
-  // Keyboard shortcuts for tool switching
+  // Keyboard shortcuts for tool switching + undo/redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore when typing in inputs
+      // Ctrl+Z / Ctrl+Shift+Z for undo/redo (works even in inputs)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+      // Ctrl+Y alternative redo
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
+      // Ignore tool shortcuts when typing in inputs
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
@@ -41,7 +62,7 @@ export const Toolbar: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setActiveTool]);
+  }, [setActiveTool, undo, redo]);
 
   return (
     <div style={styles.bar}>
@@ -51,6 +72,23 @@ export const Toolbar: React.FC = () => {
       </div>
 
       <div style={styles.center}>
+        <button
+          onClick={undo}
+          disabled={!undoAvailable}
+          title="Undo (Ctrl+Z)"
+          style={{ ...styles.toolBtn, ...(undoAvailable ? {} : styles.toolBtnDisabled) }}
+        >
+          Undo
+        </button>
+        <button
+          onClick={redo}
+          disabled={!redoAvailable}
+          title="Redo (Ctrl+Shift+Z)"
+          style={{ ...styles.toolBtn, ...(redoAvailable ? {} : styles.toolBtnDisabled) }}
+        >
+          Redo
+        </button>
+        <div style={styles.divider} />
         {tools.map((t) => (
           <button
             key={t.id}
@@ -99,7 +137,9 @@ const styles: Record<string, React.CSSProperties> = {
   left: { display: 'flex', alignItems: 'center', gap: 12 },
   logo: { fontWeight: 700, fontSize: 16, color: '#3b82f6' },
   projectName: { fontSize: 13, color: '#94a3b8' },
-  center: { display: 'flex', gap: 2 },
+  center: { display: 'flex', gap: 2, alignItems: 'center' },
+  divider: { width: 1, height: 24, background: '#334155', margin: '0 6px' },
+  toolBtnDisabled: { opacity: 0.35, cursor: 'default' },
   toolBtn: {
     padding: '6px 12px',
     borderRadius: 6,
