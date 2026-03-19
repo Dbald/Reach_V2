@@ -126,13 +126,11 @@ export const SceneViewport: React.FC = () => {
   );
 };
 
-/** Floating transform tool buttons on the canvas */
+/** Floating transform tool buttons on the canvas - vertical column under Edit Mode */
 const CanvasToolbar: React.FC = () => {
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const setActiveTool = useProjectStore((s) => s.setActiveTool);
   const selectedObjectId = useProjectStore((s) => s.editor.selectedObjectId);
-
-  if (!selectedObjectId) return null;
 
   const tools = [
     { id: 'move' as const, label: 'Move', icon: '\u2725', shortcut: 'G' },
@@ -150,10 +148,10 @@ const CanvasToolbar: React.FC = () => {
           style={{
             ...styles.canvasToolBtn,
             ...(activeTool === t.id ? styles.canvasToolBtnActive : {}),
+            ...(!selectedObjectId && activeTool !== t.id ? { opacity: 0.35 } : {}),
           }}
         >
           <span style={styles.canvasToolIcon}>{t.icon}</span>
-          <span style={styles.canvasToolLabel}>{t.label}</span>
         </button>
       ))}
     </div>
@@ -358,26 +356,27 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
     whiteSpace: 'nowrap',
   },
-  // Canvas transform toolbar
+  // Canvas transform toolbar - vertical column under mode indicator
   canvasToolbar: {
     position: 'absolute',
-    bottom: 16,
-    left: 16,
+    top: 36,
+    left: 8,
     display: 'flex',
-    gap: 4,
-    padding: 4,
-    borderRadius: 8,
+    flexDirection: 'column' as const,
+    gap: 2,
+    padding: 3,
+    borderRadius: 6,
     background: 'rgba(15, 23, 42, 0.9)',
     border: '1px solid rgba(51, 65, 85, 0.6)',
     backdropFilter: 'blur(8px)',
   },
   canvasToolBtn: {
     display: 'flex',
-    flexDirection: 'column' as const,
     alignItems: 'center',
-    gap: 2,
-    padding: '6px 12px',
-    borderRadius: 6,
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 4,
     border: 'none',
     background: 'transparent',
     color: '#94a3b8',
@@ -391,10 +390,6 @@ const styles: Record<string, React.CSSProperties> = {
   canvasToolIcon: {
     fontSize: 16,
     lineHeight: 1,
-  },
-  canvasToolLabel: {
-    fontSize: 9,
-    fontWeight: 500,
   },
   // Render mode selector
   renderModeBar: {

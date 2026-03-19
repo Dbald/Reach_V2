@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useState, useCallback, Suspense } from 'react';
+import React, { useRef, useEffect, useState, useCallback, Suspense, useMemo } from 'react';
 import * as THREE from 'three';
-import { useLoader } from '@react-three/fiber';
+import { useLoader, useFrame } from '@react-three/fiber';
 import { TransformControls, Html, Text as DreiText } from '@react-three/drei';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useProjectStore } from '@/store';
@@ -40,19 +40,24 @@ const GltfModel: React.FC<{
   meshCallback: (node: THREE.Mesh | null) => void;
 }> = ({ url, onClick, meshCallback }) => {
   const gltf = useLoader(GLTFLoader, url);
-  const groupRef = useRef<THREE.Group>(null);
+  const clonedScene = useMemo(() => {
+    const clone = gltf.scene.clone(true);
+    // Deep clone materials so each instance is independent
+    clone.traverse((child: any) => {
+      if (child.isMesh && child.material) {
+        child.material = child.material.clone();
+      }
+    });
+    return clone;
+  }, [gltf]);
 
-  useEffect(() => {
-    if (groupRef.current) {
-      // Use the group as the mesh ref for transform controls
-      meshCallback(groupRef.current as any);
-    }
-    return () => meshCallback(null);
-  }, [gltf, meshCallback]);
+  const groupRef = useCallback((node: THREE.Group | null) => {
+    meshCallback(node as any);
+  }, [meshCallback]);
 
   return (
     <group ref={groupRef} onClick={onClick}>
-      <primitive object={gltf.scene.clone()} />
+      <primitive object={clonedScene} />
     </group>
   );
 };
@@ -64,6 +69,109 @@ const GltfFallback: React.FC = () => (
     <meshStandardMaterial color="#64748b" wireframe />
   </mesh>
 );
+
+/** Video mesh with actual HTML5 video playback */
+const VideoMesh: React.FC<{
+  obj: SceneObject;
+  pos: [number, number, number];
+  scale: [number, number, number];
+  rotation: [number, number, number];
+  isSelected: boolean;
+  isWireframe: boolean;
+  meshCallback: (node: THREE.Mesh | null) => void;
+  onClick: (e: any) => void;
+}> = ({ obj, pos, scale, rotation, isSelected, isWireframe, meshCallback, onClick }) => {
+  const videoUrl = (obj.metadata?.url as string) || '';
+  const [playing, setPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const textureRef = useRef<THREE.VideoTexture | null>(null);
+
+  // Create video element
+  useEffect(() => {
+    if (!videoUrl) return;
+    const video = document.createElement('video');
+    video.src = videoUrl;
+    video.crossOrigin = 'anonymous';
+    video.loop = true;
+    video.playsInline = true;
+    video.muted = true; // Required for autoplay policies
+    videoRef.current = video;
+    const tex = new THREE.VideoTexture(video);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    textureRef.current = tex;
+    return () => {
+      video.pause();
+      video.src = '';
+      tex.dispose();
+      videoRef.current = null;
+      textureRef.current = null;
+    };
+  }, [videoUrl]);
+
+  // Keep texture updating
+  useFrame(() => {
+    if (textureRef.current && playing) {
+      textureRef.current.needsUpdate = true;
+    }
+  });
+
+  const handleVideoClick = (e: any) => {
+    onClick(e);
+    if (videoRef.current && videoUrl) {
+      if (playing) {
+        videoRef.current.pause();
+        setPlaying(false);
+      } else {
+        videoRef.current.play().then(() => setPlaying(true)).catch(() => {});
+      }
+    }
+  };
+
+  const hasVideo = videoUrl && textureRef.current && playing;
+
+  return (
+    <>
+      <mesh
+        ref={meshCallback as any}
+        position={pos}
+        scale={[scale[0] * 1.6, scale[1] * 0.9, 0.05]}
+        rotation={rotation}
+        onClick={handleVideoClick}
+        castShadow
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        {hasVideo ? (
+          <meshBasicMaterial map={textureRef.current} />
+        ) : (
+          <meshStandardMaterial color="#1a1a2e" roughness={0.3} metalness={0.6} wireframe={isWireframe} />
+        )}
+        {isSelected && (
+          <lineSegments>
+            <edgesGeometry args={[new THREE.BoxGeometry(1.02, 1.02, 1.02)]} />
+            <lineBasicMaterial color="#a855f7" linewidth={2} />
+          </lineSegments>
+        )}
+      </mesh>
+      {/* Play/pause icon overlay */}
+      {!isWireframe && !playing && (
+        <group position={[pos[0], pos[1], pos[2] + 0.03]}>
+          <mesh rotation={[0, 0, -Math.PI / 2]}>
+            <coneGeometry args={[0.15, 0.25, 3]} />
+            <meshBasicMaterial color="#a855f7" transparent opacity={0.8} />
+          </mesh>
+        </group>
+      )}
+      {isSelected && (
+        <Html center position={[pos[0], pos[1] + scale[1] * 0.55, pos[2]]} style={{ pointerEvents: 'none' }}>
+          <div style={labelStyle('#a855f7')}>
+            {obj.name} {playing ? '(playing)' : videoUrl ? '(click to play)' : '(no URL)'}
+          </div>
+        </Html>
+      )}
+    </>
+  );
+};
 
 const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMode: RenderMode }> = ({ object: obj, sceneId, renderMode }) => {
   const [meshReady, setMeshReady] = useState(false);
@@ -269,31 +377,16 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   if (obj.type === 'video') {
     return (
       <>
-        <mesh
-          ref={meshCallback as any}
-          position={pos}
-          scale={[scale[0] * 1.6, scale[1] * 0.9, 0.05]}
+        <VideoMesh
+          obj={obj}
+          pos={pos}
+          scale={scale}
           rotation={rotation}
+          isSelected={isSelected}
+          isWireframe={isWireframe}
+          meshCallback={meshCallback}
           onClick={handleClick}
-          castShadow
-        >
-          <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial color="#1a1a2e" roughness={0.3} metalness={0.6} wireframe={isWireframe} />
-          {selectionOutline}
-        </mesh>
-        {!isWireframe && (
-          <group position={[pos[0], pos[1], pos[2] + 0.03]}>
-            <mesh rotation={[0, 0, -Math.PI / 2]}>
-              <coneGeometry args={[0.15, 0.25, 3]} />
-              <meshBasicMaterial color="#a855f7" transparent opacity={0.8} />
-            </mesh>
-          </group>
-        )}
-        {isSelected && (
-          <Html center position={[pos[0], pos[1] + scale[1] * 0.55, pos[2]]} style={{ pointerEvents: 'none' }}>
-            <div style={labelStyle('#a855f7')}>{obj.name}</div>
-          </Html>
-        )}
+        />
         {gizmoElement}
       </>
     );
