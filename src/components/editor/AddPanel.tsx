@@ -39,19 +39,17 @@ export const AddPanel: React.FC = () => {
         <button style={styles.closeBtn} onClick={() => setActiveTool('select')}>&times;</button>
       </div>
 
-      {/* Show sky settings inline, or category picker */}
       {placementType === 'sky' ? (
         <SkySettings onBack={() => setPlacementType(null)} />
+      ) : placementType && placementType !== 'sky' ? (
+        <PlacementSettings type={placementType} onBack={() => setPlacementType(null)} />
       ) : (
         <div style={styles.grid}>
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setPlacementType(cat.id)}
-              style={{
-                ...styles.catBtn,
-                ...(placementType === cat.id ? styles.catBtnActive : {}),
-              }}
+              style={styles.catBtn}
             >
               <span style={styles.catIcon}>{cat.icon}</span>
               <span style={styles.catLabel}>{cat.label}</span>
@@ -60,16 +58,226 @@ export const AddPanel: React.FC = () => {
           ))}
         </div>
       )}
-
-      {/* Placement hint for non-sky types */}
-      {placementType && placementType !== 'sky' && (
-        <div style={styles.hint}>
-          Click on the ground to place a {placementType}
-        </div>
-      )}
     </div>
   );
 };
+
+/* ---------- Per-type placement settings ---------- */
+
+const lightTypes = ['point', 'spot', 'directional'] as const;
+const objectShapes = ['box', 'sphere', 'cylinder', 'plane'] as const;
+
+const PlacementSettings: React.FC<{ type: Exclude<PlacementType, 'sky' | null>; onBack: () => void }> = ({ type, onBack }) => {
+  const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
+  const addObject = useProjectStore((s) => s.addObject);
+  const selectObject = useProjectStore((s) => s.selectObject);
+
+  // Shared
+  const [name, setName] = useState('');
+  // Object
+  const [shape, setShape] = useState<typeof objectShapes[number]>('box');
+  // Light
+  const [lightType, setLightType] = useState<typeof lightTypes[number]>('point');
+  const [intensity, setIntensity] = useState(1);
+  const [color, setColor] = useState('#ffffff');
+  // Text
+  const [text, setText] = useState('Hello');
+  const [fontSize, setFontSize] = useState(0.4);
+  // Video
+  const [videoUrl, setVideoUrl] = useState('');
+  // Audio
+  const [audioUrl, setAudioUrl] = useState('');
+  const [loop, setLoop] = useState(true);
+  const [volume, setVolume] = useState(1);
+
+  const getDefaults = () => {
+    const base = {
+      name: name || defaultNames[type],
+      transform: {
+        position: { x: 0, y: defaultY[type], z: 0 },
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+        scale: { x: 1, y: 1, z: 1 },
+      },
+    };
+    switch (type) {
+      case 'object':
+        return { ...base, type: 'mesh' as const, tags: [], metadata: { shape } };
+      case 'light':
+        return { ...base, type: 'light' as const, tags: [], metadata: { lightType, intensity, color } };
+      case 'camera':
+        return { ...base, type: 'camera' as const, tags: [], metadata: { fov: 60, isEntry: false } };
+      case 'text':
+        return { ...base, type: 'text' as const, tags: [], metadata: { text, fontSize } };
+      case 'video':
+        return { ...base, type: 'video' as const, tags: [], metadata: { url: videoUrl, autoplay: false } };
+      case 'audio':
+        return { ...base, type: 'audio' as const, tags: [], metadata: { url: audioUrl, loop, volume, spatial: true } };
+      default:
+        return { ...base, type: 'mesh' as const, tags: [], metadata: {} };
+    }
+  };
+
+  const handleAddNow = () => {
+    if (!activeSceneId) return;
+    const def = getDefaults();
+    const id = addObject(activeSceneId, def.type, {
+      name: def.name,
+      transform: def.transform,
+      tags: def.tags,
+      metadata: def.metadata,
+    });
+    selectObject(id);
+  };
+
+  const catInfo = categories.find((c) => c.id === type)!;
+
+  return (
+    <div style={styles.settingsPanel}>
+      <button style={styles.backBtn} onClick={onBack}>&larr; Back</button>
+      <div style={styles.catHeader}>
+        <span style={styles.catIcon}>{catInfo.icon}</span>
+        <span style={styles.catLabel}>{catInfo.label}</span>
+      </div>
+
+      {/* Name (all types) */}
+      <div style={styles.fieldGroup}>
+        <label style={styles.fieldLabel}>Name</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={defaultNames[type]}
+          style={styles.input}
+        />
+      </div>
+
+      {/* Object-specific */}
+      {type === 'object' && (
+        <div style={styles.fieldGroup}>
+          <label style={styles.fieldLabel}>Shape</label>
+          <div style={styles.chipRow}>
+            {objectShapes.map((s) => (
+              <button
+                key={s}
+                onClick={() => setShape(s)}
+                style={{ ...styles.chip, ...(shape === s ? styles.chipActive : {}) }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Light-specific */}
+      {type === 'light' && (
+        <>
+          <div style={styles.fieldGroup}>
+            <label style={styles.fieldLabel}>Type</label>
+            <div style={styles.chipRow}>
+              {lightTypes.map((lt) => (
+                <button
+                  key={lt}
+                  onClick={() => setLightType(lt)}
+                  style={{ ...styles.chip, ...(lightType === lt ? styles.chipActive : {}) }}
+                >
+                  {lt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={styles.fieldRow2}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Intensity</label>
+              <input type="number" step={0.1} value={intensity} onChange={(e) => setIntensity(parseFloat(e.target.value) || 1)} style={styles.numInput} />
+            </div>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Color</label>
+              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={styles.colorInput} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Text-specific */}
+      {type === 'text' && (
+        <>
+          <div style={styles.fieldGroup}>
+            <label style={styles.fieldLabel}>Text Content</label>
+            <input value={text} onChange={(e) => setText(e.target.value)} style={styles.input} />
+          </div>
+          <div style={styles.fieldGroup}>
+            <label style={styles.fieldLabel}>Font Size</label>
+            <input type="number" step={0.1} min={0.1} value={fontSize} onChange={(e) => setFontSize(parseFloat(e.target.value) || 0.4)} style={styles.numInput} />
+          </div>
+        </>
+      )}
+
+      {/* Video-specific */}
+      {type === 'video' && (
+        <div style={styles.fieldGroup}>
+          <label style={styles.fieldLabel}>Video URL</label>
+          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." style={styles.input} />
+        </div>
+      )}
+
+      {/* Audio-specific */}
+      {type === 'audio' && (
+        <>
+          <div style={styles.fieldGroup}>
+            <label style={styles.fieldLabel}>Audio URL</label>
+            <input value={audioUrl} onChange={(e) => setAudioUrl(e.target.value)} placeholder="https://..." style={styles.input} />
+          </div>
+          <div style={styles.fieldRow2}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Volume</label>
+              <input type="number" step={0.1} min={0} max={1} value={volume} onChange={(e) => setVolume(parseFloat(e.target.value) || 1)} style={styles.numInput} />
+            </div>
+            <label style={styles.checkRow}>
+              <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+              <span>Loop</span>
+            </label>
+          </div>
+        </>
+      )}
+
+      {/* Camera-specific */}
+      {type === 'camera' && (
+        <div style={styles.fieldGroup}>
+          <span style={styles.hintText}>Click the ground to place a viewpoint marker. Edit FOV and entry point in the Properties panel.</span>
+        </div>
+      )}
+
+      <div style={styles.addActions}>
+        <button onClick={handleAddNow} style={styles.addBtn}>
+          Add at Origin
+        </button>
+        <div style={styles.hint}>
+          or click on the ground to place
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const defaultNames: Record<string, string> = {
+  object: 'Object',
+  light: 'Light',
+  camera: 'Camera',
+  text: 'Text',
+  video: 'Video',
+  audio: 'Audio',
+};
+
+const defaultY: Record<string, number> = {
+  object: 0.5,
+  light: 2,
+  camera: 1.7,
+  text: 1.5,
+  video: 1.5,
+  audio: 1,
+};
+
+/* ---------- Sky Settings ---------- */
 
 const SkySettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const project = useProjectStore((s) => s.project);
@@ -82,9 +290,6 @@ const SkySettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     if (!project || !activeSceneId) return;
     const store = useProjectStore.getState();
     store._pushUndo();
-    const scene = project.scenes[activeSceneId];
-    if (!scene) return;
-    // Direct mutation via immer
     useProjectStore.setState((state: any) => {
       const s = state.project?.scenes[activeSceneId];
       if (s) Object.assign(s.environment, updates);
@@ -94,7 +299,7 @@ const SkySettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const env = project?.scenes[activeSceneId ?? '']?.environment;
 
   return (
-    <div style={styles.skyPanel}>
+    <div style={styles.settingsPanel}>
       <button style={styles.backBtn} onClick={onBack}>&larr; Back</button>
       <div style={styles.sectionTitle}>Sky Preset</div>
       <div style={styles.presetGrid}>
@@ -106,8 +311,8 @@ const SkySettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               updateEnv({ skybox: p.id });
             }}
             style={{
-              ...styles.presetBtn,
-              ...(selectedPreset === p.id ? styles.presetBtnActive : {}),
+              ...styles.chip,
+              ...(selectedPreset === p.id ? styles.chipActive : {}),
             }}
           >
             {p.label}
@@ -125,26 +330,14 @@ const SkySettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <span>Enable fog</span>
       </label>
       {env?.fogEnabled && (
-        <div style={styles.fogInputs}>
-          <div style={styles.fieldRow}>
+        <div style={styles.fieldRow2}>
+          <div style={styles.fieldGroup}>
             <label style={styles.fieldLabel}>Near</label>
-            <input
-              type="number"
-              step={1}
-              value={env?.fogNear ?? 10}
-              onChange={(e) => updateEnv({ fogNear: parseFloat(e.target.value) || 10 })}
-              style={styles.numInput}
-            />
+            <input type="number" step={1} value={env?.fogNear ?? 10} onChange={(e) => updateEnv({ fogNear: parseFloat(e.target.value) || 10 })} style={styles.numInput} />
           </div>
-          <div style={styles.fieldRow}>
+          <div style={styles.fieldGroup}>
             <label style={styles.fieldLabel}>Far</label>
-            <input
-              type="number"
-              step={1}
-              value={env?.fogFar ?? 50}
-              onChange={(e) => updateEnv({ fogFar: parseFloat(e.target.value) || 50 })}
-              style={styles.numInput}
-            />
+            <input type="number" step={1} value={env?.fogFar ?? 50} onChange={(e) => updateEnv({ fogFar: parseFloat(e.target.value) || 50 })} style={styles.numInput} />
           </div>
         </div>
       )}
@@ -162,13 +355,15 @@ const SkySettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   );
 };
 
+/* ---------- Styles ---------- */
+
 const styles: Record<string, React.CSSProperties> = {
   panel: {
     position: 'absolute',
     top: 56,
     left: '50%',
     transform: 'translateX(-50%)',
-    width: 340,
+    width: 360,
     background: '#0f172a',
     border: '1px solid #1e293b',
     borderRadius: 10,
@@ -213,24 +408,17 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'all 0.15s',
   },
-  catBtnActive: {
-    borderColor: '#3b82f6',
-    background: '#1e293b',
-    color: '#fff',
+  catHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
   catIcon: { fontSize: 20 },
-  catLabel: { fontWeight: 600, fontSize: 12 },
+  catLabel: { fontWeight: 600, fontSize: 13 },
   catDesc: { fontSize: 10, color: '#64748b', textAlign: 'center' },
-  hint: {
-    padding: '8px 14px',
-    borderTop: '1px solid #1e293b',
-    color: '#3b82f6',
-    fontSize: 11,
-    fontWeight: 500,
-    textAlign: 'center',
-  },
-  // Sky settings
-  skyPanel: { padding: '10px 14px' },
+  // Settings panel (shared by placement & sky)
+  settingsPanel: { padding: '10px 14px' },
   backBtn: {
     background: 'none',
     border: 'none',
@@ -249,24 +437,59 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 10,
     marginBottom: 6,
   },
-  presetGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr 1fr',
-    gap: 4,
+  fieldGroup: { marginBottom: 10 },
+  fieldLabel: { fontSize: 10, color: '#94a3b8', display: 'block', marginBottom: 4 },
+  fieldRow2: { display: 'flex', gap: 8 },
+  input: {
+    width: '100%',
+    padding: '6px 8px',
+    borderRadius: 6,
+    border: '1px solid #334155',
+    background: '#1e293b',
+    color: '#fff',
+    fontSize: 12,
+    outline: 'none',
+    boxSizing: 'border-box',
   },
-  presetBtn: {
-    padding: '6px 4px',
+  numInput: {
+    width: '100%',
+    padding: '6px 8px',
+    borderRadius: 6,
+    border: '1px solid #334155',
+    background: '#1e293b',
+    color: '#fff',
+    fontSize: 12,
+    outline: 'none',
+    boxSizing: 'border-box',
+  },
+  colorInput: {
+    width: '100%',
+    height: 32,
+    padding: 2,
+    borderRadius: 6,
+    border: '1px solid #334155',
+    background: '#1e293b',
+    cursor: 'pointer',
+  },
+  chipRow: { display: 'flex', gap: 4, flexWrap: 'wrap' },
+  chip: {
+    padding: '5px 10px',
     borderRadius: 6,
     border: '1px solid #334155',
     background: '#0a0a1a',
     color: '#94a3b8',
-    fontSize: 10,
+    fontSize: 11,
     cursor: 'pointer',
   },
-  presetBtnActive: {
+  chipActive: {
     borderColor: '#3b82f6',
     background: '#1e293b',
     color: '#fff',
+  },
+  presetGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr 1fr',
+    gap: 4,
   },
   checkRow: {
     display: 'flex',
@@ -277,17 +500,27 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     marginBottom: 4,
   },
-  fogInputs: { display: 'flex', gap: 8, marginTop: 4 },
-  fieldRow: { flex: 1 },
-  fieldLabel: { fontSize: 9, color: '#64748b', display: 'block', marginBottom: 2 },
-  numInput: {
-    width: '100%',
-    padding: '4px 6px',
-    borderRadius: 4,
-    border: '1px solid #334155',
-    background: '#1e293b',
-    color: '#fff',
+  hintText: { fontSize: 11, color: '#64748b', lineHeight: 1.4 },
+  hint: {
+    color: '#64748b',
     fontSize: 11,
-    outline: 'none',
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  addActions: {
+    borderTop: '1px solid #1e293b',
+    paddingTop: 10,
+    marginTop: 10,
+  },
+  addBtn: {
+    width: '100%',
+    padding: '8px',
+    borderRadius: 6,
+    border: 'none',
+    background: '#3b82f6',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
   },
 };

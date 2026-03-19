@@ -65,6 +65,7 @@ const ZoneMesh: React.FC<{ zone: Zone }> = ({ zone }) => {
       <Html
         position={[0, zone.size.y / 2 + 0.3, 0]}
         center
+        zIndexRange={[1, 0]}
         style={{ pointerEvents: 'none' }}
       >
         <div style={{

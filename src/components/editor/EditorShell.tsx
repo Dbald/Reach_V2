@@ -10,7 +10,6 @@ import { Toolbar } from './Toolbar';
 import { SceneHierarchy } from './SceneHierarchy';
 import { PropertyInspector } from './PropertyInspector';
 import { AssetTray } from './AssetTray';
-import { PublishPanel } from './PublishPanel';
 import { AddPanel } from './AddPanel';
 import { SceneViewport } from '@/components/viewer/SceneViewport';
 import { XRViewer } from '@/components/viewer/XRViewer';
@@ -38,7 +37,6 @@ export const EditorShell: React.FC = () => {
           <AssetTray />
         </div>
         <PropertyInspector />
-        <PublishPanel />
       </div>
     </div>
   );
