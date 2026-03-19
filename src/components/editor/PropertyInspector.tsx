@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useProjectStore } from '@/store';
-import type { SceneObject, Vector3 } from '@/types';
+import type { SceneObject, Vector3, Quaternion } from '@/types';
 
 export const PropertyInspector: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -59,6 +59,9 @@ export const PropertyInspector: React.FC = () => {
 const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj, sceneId }) => {
   const updateObject = useProjectStore((s) => s.updateObject);
   const setObjectTransform = useProjectStore((s) => s.setObjectTransform);
+  const setObjectMaterial = useProjectStore((s) => s.setObjectMaterial);
+  const addAsset = useProjectStore((s) => s.addAsset);
+  const project = useProjectStore((s) => s.project);
 
   const handleVec3Change = (
     field: 'position' | 'scale',
@@ -69,6 +72,15 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
     if (isNaN(num)) return;
     const transform = { ...obj.transform };
     transform[field] = { ...transform[field], [axis]: num };
+    setObjectTransform(sceneId, obj.id, transform);
+  };
+
+  const handleRotationChange = (axis: 'x' | 'y' | 'z', value: string) => {
+    const degrees = parseFloat(value);
+    if (isNaN(degrees)) return;
+    const radians = (degrees * Math.PI) / 180;
+    const transform = { ...obj.transform };
+    transform.rotation = { ...transform.rotation, [axis]: radians };
     setObjectTransform(sceneId, obj.id, transform);
   };
 
@@ -85,6 +97,38 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
       metadata: { ...obj.metadata, [key]: value },
     });
   };
+
+  const handleMaterial = (updates: Partial<NonNullable<SceneObject['material']>>) => {
+    const mat = { ...(obj.material ?? {}), ...updates };
+    setObjectMaterial(sceneId, obj.id, mat);
+  };
+
+  const handleTextureUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !['png', 'jpg', 'jpeg'].includes(ext)) return;
+    const url = URL.createObjectURL(file);
+    const assetId = `tex-${Date.now()}`;
+    addAsset({
+      id: assetId,
+      name: file.name.replace(/\.[^.]+$/, ''),
+      format: ext === 'jpeg' ? 'jpg' : ext as any,
+      url,
+      fileSizeBytes: file.size,
+      status: 'ready',
+      metadata: { originalFileName: file.name, mimeType: file.type },
+      validationErrors: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    handleMaterial({ textureAssetId: assetId });
+    e.target.value = '';
+  }, [addAsset, obj.material, sceneId, obj.id]);
+
+  // Current texture name
+  const texAssetId = obj.material?.textureAssetId;
+  const texAsset = texAssetId && project ? project.assets[texAssetId] : null;
 
   return (
     <div style={{ minWidth: 260 }}>
@@ -117,9 +161,67 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
         <Vec3Input value={obj.transform.position} onChange={(axis, val) => handleVec3Change('position', axis, val)} />
       </Section>
 
+      <Section title="Rotation">
+        <RotationInput rotation={obj.transform.rotation} onChange={handleRotationChange} />
+      </Section>
+
       <Section title="Scale">
         <Vec3Input value={obj.transform.scale} onChange={(axis, val) => handleVec3Change('scale', axis, val)} />
       </Section>
+
+      {/* Material / Texture - for meshes, video, and other visual objects */}
+      {(obj.type === 'mesh' || obj.type === 'video') && (
+        <Section title="Texture">
+          {texAsset ? (
+            <div style={styles.textureInfo}>
+              <span style={styles.textureName}>{texAsset.name}</span>
+              <button
+                onClick={() => handleMaterial({ textureAssetId: undefined })}
+                style={styles.textureRemoveBtn}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <span style={styles.muted}>No texture</span>
+          )}
+          <label style={styles.uploadBtn}>
+            <input
+              type="file"
+              accept=".png,.jpg,.jpeg"
+              onChange={handleTextureUpload}
+              style={{ display: 'none' }}
+            />
+            {texAsset ? 'Replace Texture' : 'Upload Texture'}
+          </label>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>Roughness</label>
+              <input
+                type="number"
+                step={0.1}
+                min={0}
+                max={1}
+                value={obj.material?.roughness ?? 0.7}
+                onChange={(e) => handleMaterial({ roughness: parseFloat(e.target.value) || 0.7 })}
+                style={styles.numInput}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>Metalness</label>
+              <input
+                type="number"
+                step={0.1}
+                min={0}
+                max={1}
+                value={obj.material?.metalness ?? 0.1}
+                onChange={(e) => handleMaterial({ metalness: parseFloat(e.target.value) || 0 })}
+                style={styles.numInput}
+              />
+            </div>
+          </div>
+        </Section>
+      )}
 
       {/* --- Type-specific metadata sections --- */}
 
@@ -340,6 +442,29 @@ const Vec3Input: React.FC<{
   </div>
 );
 
+const RotationInput: React.FC<{
+  rotation: Quaternion;
+  onChange: (axis: 'x' | 'y' | 'z', value: string) => void;
+}> = ({ rotation, onChange }) => {
+  const toDeg = (rad: number) => Math.round((rad * 180) / Math.PI * 10) / 10;
+  return (
+    <div style={styles.vec3Row}>
+      {(['x', 'y', 'z'] as const).map((axis) => (
+        <div key={axis} style={styles.vec3Field}>
+          <label style={styles.axisLabel}>{axis.toUpperCase()}</label>
+          <input
+            type="number"
+            step={5}
+            value={toDeg(rotation[axis])}
+            onChange={(e) => onChange(axis, e.target.value)}
+            style={styles.numInput}
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const styles: Record<string, React.CSSProperties> = {
   panel: {
     background: '#0f172a',
@@ -423,4 +548,39 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#94a3b8',
   },
   muted: { color: '#475569', fontStyle: 'italic', fontSize: 11 },
+  textureInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  textureName: {
+    fontSize: 11,
+    color: '#e2e8f0',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  textureRemoveBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#ef4444',
+    fontSize: 10,
+    cursor: 'pointer',
+    padding: '2px 4px',
+    flexShrink: 0,
+  },
+  uploadBtn: {
+    display: 'block',
+    width: '100%',
+    padding: '6px',
+    borderRadius: 4,
+    border: '1px dashed #334155',
+    background: 'transparent',
+    color: '#94a3b8',
+    fontSize: 11,
+    textAlign: 'center' as const,
+    cursor: 'pointer',
+    marginTop: 4,
+  },
 };

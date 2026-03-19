@@ -475,6 +475,10 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     }
   };
 
+  // Check for texture
+  const texAssetId = obj.material?.textureAssetId;
+  const texUrl = texAssetId && project ? project.assets[texAssetId]?.url : null;
+
   return (
     <>
       <mesh
@@ -487,19 +491,63 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
         receiveShadow
       >
         {renderGeometry()}
-        <meshStandardMaterial
-          color={getColor()}
-          transparent={isSelected}
-          opacity={isSelected ? 0.85 : 1}
-          roughness={0.7}
-          metalness={0.1}
-          side={shape === 'plane' ? 2 : 0}
-          wireframe={isWireframe}
-        />
+        {texUrl ? (
+          <TexturedMaterial
+            url={texUrl}
+            color={getColor()}
+            isSelected={isSelected}
+            roughness={obj.material?.roughness ?? 0.7}
+            metalness={obj.material?.metalness ?? 0.1}
+            side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
+            wireframe={isWireframe}
+          />
+        ) : (
+          <meshStandardMaterial
+            color={getColor()}
+            transparent={isSelected}
+            opacity={isSelected ? 0.85 : 1}
+            roughness={obj.material?.roughness ?? 0.7}
+            metalness={obj.material?.metalness ?? 0.1}
+            side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
+            wireframe={isWireframe}
+          />
+        )}
         {selectionOutline}
       </mesh>
       {gizmoElement}
     </>
+  );
+};
+
+/** Loads a texture from URL and applies it to a mesh */
+const TexturedMaterial: React.FC<{
+  url: string;
+  color: string;
+  isSelected: boolean;
+  roughness: number;
+  metalness: number;
+  side: THREE.Side;
+  wireframe: boolean;
+}> = ({ url, color, isSelected, roughness, metalness, side, wireframe }) => {
+  const texture = useMemo(() => {
+    const loader = new THREE.TextureLoader();
+    const tex = loader.load(url);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }, [url]);
+
+  return (
+    <meshStandardMaterial
+      map={texture}
+      color={color}
+      transparent={isSelected}
+      opacity={isSelected ? 0.85 : 1}
+      roughness={roughness}
+      metalness={metalness}
+      side={side}
+      wireframe={wireframe}
+    />
   );
 };
 
