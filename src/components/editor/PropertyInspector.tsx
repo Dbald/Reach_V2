@@ -373,27 +373,7 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
 
       {/* Camera properties */}
       {obj.type === 'camera' && (
-        <Section title="Camera">
-          <Field label="FOV">
-            <input
-              type="number"
-              step={5}
-              min={10}
-              max={180}
-              value={(obj.metadata?.fov as number) ?? 60}
-              onChange={(e) => handleMetadata('fov', parseFloat(e.target.value) || 60)}
-              style={styles.numInput}
-            />
-          </Field>
-          <label style={styles.toggle}>
-            <input
-              type="checkbox"
-              checked={(obj.metadata?.isEntry as boolean) ?? false}
-              onChange={(e) => handleMetadata('isEntry', e.target.checked)}
-            />
-            Entry Point
-          </label>
-        </Section>
+        <CameraSection obj={obj} sceneId={sceneId} handleMetadata={handleMetadata} />
       )}
 
       <Section title="Tags">
@@ -447,6 +427,67 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
         </Section>
       )}
     </div>
+  );
+};
+
+const CameraSection: React.FC<{
+  obj: SceneObject;
+  sceneId: string;
+  handleMetadata: (key: string, value: unknown) => void;
+}> = ({ obj, sceneId, handleMetadata }) => {
+  const setActiveCamera = useProjectStore((s) => s.setActiveCamera);
+  const isActive = (obj.metadata?.isEntry as boolean) ?? false;
+
+  return (
+    <Section title="Camera">
+      <Field label="FOV">
+        <input
+          type="number"
+          step={5}
+          min={10}
+          max={180}
+          value={(obj.metadata?.fov as number) ?? 60}
+          onChange={(e) => handleMetadata('fov', parseFloat(e.target.value) || 60)}
+          style={styles.numInput}
+        />
+      </Field>
+      <div style={{ marginTop: 6 }}>
+        {isActive ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 10px',
+            borderRadius: 6,
+            background: 'rgba(34, 197, 94, 0.15)',
+            border: '1px solid rgba(34, 197, 94, 0.3)',
+          }}>
+            <span style={{ fontSize: 12 }}>{'\u2713'}</span>
+            <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>Active Camera</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => setActiveCamera(sceneId, obj.id)}
+            style={{
+              width: '100%',
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid #334155',
+              background: '#1e293b',
+              color: '#94a3b8',
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            Set as Active Camera
+          </button>
+        )}
+      </div>
+      <div style={{ fontSize: 10, color: '#475569', marginTop: 6, lineHeight: 1.4 }}>
+        The active camera is used as the spawn point in Preview mode.
+      </div>
+    </Section>
   );
 };
 

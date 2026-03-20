@@ -74,11 +74,24 @@ export const FirstPersonControls: React.FC<{ scene?: Scene }> = ({ scene }) => {
     return boxes;
   }, [scene]);
 
-  // Set initial camera to eye height
+  // Set initial camera to active camera position or default
   useEffect(() => {
+    if (scene) {
+      const activeCamera = Object.values(scene.objects).find(
+        (obj) => obj.type === 'camera' && obj.metadata?.isEntry
+      );
+      if (activeCamera) {
+        const pos = activeCamera.transform.position;
+        const rot = activeCamera.transform.rotation;
+        camera.position.set(pos.x, EYE_HEIGHT, pos.z);
+        euler.current.set(rot.x, rot.y, rot.z, 'YXZ');
+        camera.quaternion.setFromEuler(euler.current);
+        return;
+      }
+    }
     camera.position.set(0, EYE_HEIGHT, 5);
     euler.current.setFromQuaternion(camera.quaternion, 'YXZ');
-  }, [camera]);
+  }, [camera, scene]);
 
   // Pointer lock on click
   useEffect(() => {

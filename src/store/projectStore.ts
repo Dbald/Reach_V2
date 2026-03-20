@@ -74,6 +74,7 @@ interface ProjectStore {
   duplicateObject: (sceneId: string, objectId: string) => string | null;
   setObjectTransform: (sceneId: string, objectId: string, transform: Transform) => void;
   setObjectMaterial: (sceneId: string, objectId: string, material: MaterialConfig) => void;
+  setActiveCamera: (sceneId: string, cameraObjectId: string) => void;
 
   // Zone actions
   addZone: (sceneId: string, zone: Omit<Zone, 'id'>) => string;
@@ -296,6 +297,21 @@ export const useProjectStore = create<ProjectStore>()(
       set((state) => {
         const obj = state.project?.scenes[sceneId]?.objects[objectId];
         if (obj) obj.material = material;
+      });
+    },
+
+    setActiveCamera: (sceneId, cameraObjectId) => {
+      get()._pushUndo();
+      set((state) => {
+        const scene = state.project?.scenes[sceneId];
+        if (!scene) return;
+        // Unset isEntry on all other cameras, set on the target
+        for (const obj of Object.values(scene.objects)) {
+          if (obj.type === 'camera') {
+            obj.metadata.isEntry = obj.id === cameraObjectId;
+          }
+        }
+        state.project!.updatedAt = new Date().toISOString();
       });
     },
 
