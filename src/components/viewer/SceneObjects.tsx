@@ -36,17 +36,39 @@ const toolToMode = (tool: string): 'translate' | 'rotate' | 'scale' | null => {
   }
 };
 
-/** Loads and renders a GLTF model */
+/** Loads and renders a GLTF model, auto-scaled to fit a ~1 unit bounding box */
 const GltfModel: React.FC<{
   url: string;
   onClick: (e: any) => void;
-  meshCallback: (node: THREE.Mesh | null) => void;
-}> = ({ url, onClick, meshCallback }) => {
+}> = ({ url, onClick }) => {
   const gltf = useLoader(GLTFLoader, url);
 
-  // Clone scene once; only clone materials if the same gltf is reused
+  // Clone scene once and auto-normalize to fit within a unit box
   const clonedScene = useMemo(() => {
     const clone = gltf.scene.clone(true);
+
+    // Compute bounding box to auto-scale
+    const box = new THREE.Box3().setFromObject(clone);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+
+    // Scale to fit within ~2 units tall (reasonable human-ish size)
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim > 0) {
+      const targetSize = 2;
+      const s = targetSize / maxDim;
+      clone.scale.multiplyScalar(s);
+
+      // Re-center so the model sits on its base (y=0)
+      box.setFromObject(clone);
+      box.getCenter(center);
+      const minY = box.min.y;
+      clone.position.sub(center);
+      clone.position.y -= minY; // sit on ground
+    }
+
     return clone;
   }, [gltf]);
 
@@ -70,12 +92,8 @@ const GltfModel: React.FC<{
     };
   }, [clonedScene]);
 
-  const groupRef = useCallback((node: THREE.Group | null) => {
-    meshCallback(node as any);
-  }, [meshCallback]);
-
   return (
-    <group ref={groupRef} onClick={onClick}>
+    <group onClick={onClick}>
       <primitive object={clonedScene} />
     </group>
   );
@@ -455,12 +473,12 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     if (asset && is3D && asset.url) {
       return (
         <>
-          <group position={pos} scale={scale} rotation={rotation}>
+          <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation}>
             <Suspense fallback={<GltfFallback />}>
-              <GltfModel url={asset.url} onClick={handleClick} meshCallback={meshCallback} />
+              <GltfModel url={asset.url} onClick={handleClick} />
             </Suspense>
             {isSelected && (
-              <Html center position={[0, 1, 0]} style={{ pointerEvents: 'none' }}>
+              <Html center position={[0, 2.2, 0]} style={{ pointerEvents: 'none' }}>
                 <div style={labelStyle('#3b82f6')}>{obj.name}</div>
               </Html>
             )}
