@@ -104,7 +104,7 @@ export const SceneViewport: React.FC = () => {
             </GizmoHelper>
           </>
         )}
-        {viewMode === 'preview' && <FirstPersonControls />}
+        {viewMode === 'preview' && <FirstPersonControls scene={scene} />}
 
         {/* Environment/skybox */}
         <Environment preset={(env.skybox as any) || 'sunset'} background={!!env.skybox} />
