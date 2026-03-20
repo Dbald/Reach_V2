@@ -404,6 +404,48 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
           ))}
         </div>
       </Section>
+
+      {/* Physics / Collision - available for all visual object types */}
+      {(obj.type === 'mesh' || obj.type === 'video' || obj.type === 'audio' || obj.assetId) && (
+        <Section title="Physics">
+          <label style={styles.toggle}>
+            <input
+              type="checkbox"
+              checked={(obj.metadata?.hasCollision as boolean) ?? false}
+              onChange={(e) => handleMetadata('hasCollision', e.target.checked)}
+            />
+            Collision
+          </label>
+          {!!(obj.metadata?.hasCollision) && (
+            <>
+              <Field label="Collision Shape">
+                <div style={styles.chipRow}>
+                  {['auto', 'box', 'sphere', 'mesh'].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleMetadata('collisionShape', s)}
+                      style={{
+                        ...styles.chip,
+                        ...((obj.metadata?.collisionShape || 'auto') === s ? styles.chipActive : {}),
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <label style={styles.toggle}>
+                <input
+                  type="checkbox"
+                  checked={(obj.metadata?.isStatic as boolean) ?? true}
+                  onChange={(e) => handleMetadata('isStatic', e.target.checked)}
+                />
+                Static
+              </label>
+            </>
+          )}
+        </Section>
+      )}
     </div>
   );
 };
