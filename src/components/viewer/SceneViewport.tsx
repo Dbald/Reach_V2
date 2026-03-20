@@ -29,6 +29,17 @@ export const SceneViewport: React.FC = () => {
         camera={{ position: [0, 5, 10], fov: 60, near: 0.1, far: 1000 }}
         shadows
         style={{ width: '100%', height: '100%' }}
+        onCreated={({ gl }) => {
+          const canvas = gl.domElement;
+          canvas.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('WebGL context lost — will attempt restore');
+          });
+          canvas.addEventListener('webglcontextrestored', () => {
+            console.log('WebGL context restored');
+          });
+        }}
+        gl={{ powerPreference: 'high-performance', antialias: true }}
       >
         {/* Lighting - always present but varies by render mode */}
         {renderMode === 'unlit' ? (

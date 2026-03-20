@@ -7,6 +7,9 @@ import { useProjectStore } from '@/store';
 import type { RenderMode } from '@/store/projectStore';
 import type { Scene, SceneObject } from '@/types';
 
+/** Shared geometry for selection outlines — avoids creating new BoxGeometry every render */
+const selectionBoxGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
+
 interface SceneObjectsProps {
   scene: Scene;
   renderMode?: RenderMode;
@@ -40,16 +43,32 @@ const GltfModel: React.FC<{
   meshCallback: (node: THREE.Mesh | null) => void;
 }> = ({ url, onClick, meshCallback }) => {
   const gltf = useLoader(GLTFLoader, url);
+
+  // Clone scene once; only clone materials if the same gltf is reused
   const clonedScene = useMemo(() => {
     const clone = gltf.scene.clone(true);
-    // Deep clone materials so each instance is independent
-    clone.traverse((child: any) => {
-      if (child.isMesh && child.material) {
-        child.material = child.material.clone();
-      }
-    });
     return clone;
   }, [gltf]);
+
+  // Dispose of cloned resources on unmount
+  useEffect(() => {
+    return () => {
+      clonedScene.traverse((child: any) => {
+        if (child.isMesh) {
+          child.geometry?.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m: THREE.Material) => {
+              disposeTextures(m);
+              m.dispose();
+            });
+          } else if (child.material) {
+            disposeTextures(child.material);
+            child.material.dispose();
+          }
+        }
+      });
+    };
+  }, [clonedScene]);
 
   const groupRef = useCallback((node: THREE.Group | null) => {
     meshCallback(node as any);
@@ -61,6 +80,17 @@ const GltfModel: React.FC<{
     </group>
   );
 };
+
+/** Dispose all textures on a material */
+function disposeTextures(material: any) {
+  if (!material) return;
+  const texProps = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'envMap', 'lightMap', 'bumpMap', 'displacementMap'];
+  for (const prop of texProps) {
+    if (material[prop]) {
+      material[prop].dispose();
+    }
+  }
+}
 
 /** Fallback for GLTF loading */
 const GltfFallback: React.FC = () => (
@@ -148,7 +178,7 @@ const VideoMesh: React.FC<{
         )}
         {isSelected && (
           <lineSegments>
-            <edgesGeometry args={[new THREE.BoxGeometry(1.02, 1.02, 1.02)]} />
+            <edgesGeometry args={[selectionBoxGeo]} />
             <lineBasicMaterial color="#a855f7" linewidth={2} />
           </lineSegments>
         )}
@@ -265,7 +295,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
   const selectionOutline = isSelected ? (
     <lineSegments>
-      <edgesGeometry args={[new THREE.BoxGeometry(1.02, 1.02, 1.02)]} />
+      <edgesGeometry args={[selectionBoxGeo]} />
       <lineBasicMaterial color="#3b82f6" linewidth={2} />
     </lineSegments>
   ) : null;
@@ -536,6 +566,11 @@ const TexturedMaterial: React.FC<{
     tex.wrapT = THREE.RepeatWrapping;
     return tex;
   }, [url]);
+
+  // Dispose texture on unmount or URL change
+  useEffect(() => {
+    return () => { texture.dispose(); };
+  }, [texture]);
 
   return (
     <meshStandardMaterial
