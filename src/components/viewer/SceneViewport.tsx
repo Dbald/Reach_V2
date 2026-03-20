@@ -128,7 +128,8 @@ export const SceneViewport: React.FC = () => {
   );
 };
 
-/** Smoothly moves the camera to focus on a selected object when "/" is pressed */
+/** Smoothly moves the camera to focus on a selected object when "/" is pressed.
+ *  Pressing "/" again returns to the original camera position (toggle). */
 const CameraFocus: React.FC<{ scene: Scene }> = ({ scene }) => {
   const { camera, controls } = useThree();
   const focusTargetId = useProjectStore((s) => s.editor.focusTargetId);
@@ -137,12 +138,42 @@ const CameraFocus: React.FC<{ scene: Scene }> = ({ scene }) => {
   const animating = useRef(false);
   const startCamPos = useRef(new THREE.Vector3());
   const endCamPos = useRef(new THREE.Vector3());
+  const startTargetPos = useRef(new THREE.Vector3());
   const progress = useRef(0);
+
+  // Saved original camera state before focus
+  const savedCamPos = useRef(new THREE.Vector3());
+  const savedOrbitTarget = useRef(new THREE.Vector3());
+  const hasSavedState = useRef(false);
 
   useEffect(() => {
     if (!focusTargetId) return;
+
+    const orbitControls = controls as any;
+
+    // Unfocus: animate back to saved position
+    if (focusTargetId === '__unfocus__') {
+      if (!hasSavedState.current) { clearFocusTarget(); return; }
+      startCamPos.current.copy(camera.position);
+      endCamPos.current.copy(savedCamPos.current);
+      startTargetPos.current.copy(orbitControls?.target ?? new THREE.Vector3());
+      targetPos.current.copy(savedOrbitTarget.current);
+      progress.current = 0;
+      animating.current = true;
+      hasSavedState.current = false;
+      return;
+    }
+
+    // Focus: save current state, then animate to object
     const obj = scene.objects[focusTargetId];
     if (!obj) { clearFocusTarget(); return; }
+
+    // Save the current camera + orbit state before focusing
+    savedCamPos.current.copy(camera.position);
+    if (orbitControls?.target) {
+      savedOrbitTarget.current.copy(orbitControls.target);
+    }
+    hasSavedState.current = true;
 
     const objPos = new THREE.Vector3(
       obj.transform.position.x,
@@ -151,13 +182,13 @@ const CameraFocus: React.FC<{ scene: Scene }> = ({ scene }) => {
     );
     targetPos.current.copy(objPos);
 
-    // Position camera at an offset from the object
     const offset = new THREE.Vector3(3, 2, 3);
     endCamPos.current.copy(objPos).add(offset);
     startCamPos.current.copy(camera.position);
+    startTargetPos.current.copy(orbitControls?.target ?? new THREE.Vector3());
     progress.current = 0;
     animating.current = true;
-  }, [focusTargetId, scene, camera, clearFocusTarget]);
+  }, [focusTargetId, scene, camera, controls, clearFocusTarget]);
 
   useFrame((_, delta) => {
     if (!animating.current) return;
@@ -167,10 +198,9 @@ const CameraFocus: React.FC<{ scene: Scene }> = ({ scene }) => {
 
     camera.position.lerpVectors(startCamPos.current, endCamPos.current, t);
 
-    // Update OrbitControls target
     const orbitControls = controls as any;
     if (orbitControls?.target) {
-      orbitControls.target.lerp(targetPos.current, t);
+      orbitControls.target.lerpVectors(startTargetPos.current, targetPos.current, t);
       orbitControls.update();
     }
 

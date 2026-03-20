@@ -31,6 +31,7 @@ interface EditorState {
   showInspector: boolean;
   showAssetTray: boolean;
   focusTargetId: string | null;
+  isFocused: boolean;
 }
 
 const MAX_UNDO = 50;
@@ -78,6 +79,7 @@ interface ProjectStore {
   setPlacementSettings: (settings: Record<string, unknown>) => void;
   setRenderMode: (mode: RenderMode) => void;
   focusOnSelected: () => void;
+  unfocus: () => void;
   clearFocusTarget: () => void;
   setViewMode: (mode: EditorState['viewMode']) => void;
   togglePanel: (panel: 'showHierarchy' | 'showInspector' | 'showAssetTray') => void;
@@ -94,6 +96,7 @@ const defaultEditorState: EditorState = {
   placementSettings: {},
   renderMode: 'lit' as RenderMode,
   focusTargetId: null,
+  isFocused: false,
   viewMode: 'editor',
   showGrid: true,
   showHierarchy: true,
@@ -359,11 +362,27 @@ export const useProjectStore = create<ProjectStore>()(
 
     focusOnSelected: () => {
       const { editor } = get();
+      if (editor.isFocused) {
+        // Toggle: unfocus back to original view
+        set((state) => {
+          state.editor.isFocused = false;
+          state.editor.focusTargetId = '__unfocus__';
+        });
+        return;
+      }
       if (editor.selectedObjectId) {
         set((state) => {
           state.editor.focusTargetId = editor.selectedObjectId;
+          state.editor.isFocused = true;
         });
       }
+    },
+
+    unfocus: () => {
+      set((state) => {
+        state.editor.isFocused = false;
+        state.editor.focusTargetId = '__unfocus__';
+      });
     },
 
     clearFocusTarget: () => {
