@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback, Suspense, useMemo } from 'react';
 import * as THREE from 'three';
-import { useLoader, useFrame } from '@react-three/fiber';
+import { useLoader, useFrame, useThree } from '@react-three/fiber';
 import { TransformControls, Html, Text as DreiText } from '@react-three/drei';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useProjectStore } from '@/store';
@@ -40,7 +40,8 @@ const toolToMode = (tool: string): 'translate' | 'rotate' | 'scale' | null => {
 const GltfModel: React.FC<{
   url: string;
   onClick: (e: any) => void;
-}> = ({ url, onClick }) => {
+  onPointerDown?: (e: any) => void;
+}> = ({ url, onClick, onPointerDown }) => {
   const gltf = useLoader(GLTFLoader, url);
 
   // Clone scene once and auto-normalize to fit within a unit box
@@ -93,7 +94,7 @@ const GltfModel: React.FC<{
   }, [clonedScene]);
 
   return (
-    <group onClick={onClick}>
+    <group onClick={onClick} onPointerDown={onPointerDown}>
       <primitive object={clonedScene} />
     </group>
   );
@@ -128,7 +129,8 @@ const VideoMesh: React.FC<{
   isWireframe: boolean;
   meshCallback: (node: THREE.Mesh | null) => void;
   onClick: (e: any) => void;
-}> = ({ obj, pos, scale, rotation, isSelected, isWireframe, meshCallback, onClick }) => {
+  onPointerDown?: (e: any) => void;
+}> = ({ obj, pos, scale, rotation, isSelected, isWireframe, meshCallback, onClick, onPointerDown }) => {
   const videoUrl = (obj.metadata?.url as string) || '';
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -186,6 +188,7 @@ const VideoMesh: React.FC<{
         scale={[scale[0] * 1.6, scale[1] * 0.9, 0.05]}
         rotation={rotation}
         onClick={handleVideoClick}
+        onPointerDown={onPointerDown}
         castShadow
       >
         <boxGeometry args={[1, 1, 1]} />
@@ -272,6 +275,104 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     return () => controls.removeEventListener('mouseUp', handleChange);
   }, [showGizmo, sceneId, obj.id, setObjectTransform]);
 
+  // --- Drag-to-move on selected objects ---
+  const { camera, gl, controls } = useThree();
+  const isDragging = useRef(false);
+  const dragStartPos = useRef<{ x: number; y: number; z: number } | null>(null);
+  const dragPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+  const dragOffset = useRef(new THREE.Vector3());
+
+  const handlePointerDown = (e: any) => {
+    // Left-click on selected object starts drag (only in select mode)
+    if (e.button !== 0 || !isSelected || activeTool !== 'select') return;
+    e.stopPropagation();
+
+    // Save original position for cancel
+    dragStartPos.current = { ...obj.transform.position };
+
+    // Compute drag plane at the object's Y height
+    dragPlane.constant = -obj.transform.position.y;
+
+    // Calculate offset between click point and object center so drag feels natural
+    const intersection = new THREE.Vector3();
+    const rect = gl.domElement.getBoundingClientRect();
+    const pointerNDC = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(pointerNDC, camera);
+    if (ray.ray.intersectPlane(dragPlane, intersection)) {
+      dragOffset.current.set(
+        obj.transform.position.x - intersection.x,
+        0,
+        obj.transform.position.z - intersection.z,
+      );
+    }
+
+    isDragging.current = true;
+
+    // Disable orbit controls during drag
+    if (controls) (controls as any).enabled = false;
+
+    // Attach window-level listeners for move/up/cancel
+    const onMove = (ev: PointerEvent) => {
+      if (!isDragging.current) return;
+      const r2 = gl.domElement.getBoundingClientRect();
+      const ndcX = ((ev.clientX - r2.left) / r2.width) * 2 - 1;
+      const ndcY = -((ev.clientY - r2.top) / r2.height) * 2 + 1;
+      const r = new THREE.Raycaster();
+      r.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+      const hit = new THREE.Vector3();
+      if (r.ray.intersectPlane(dragPlane, hit)) {
+        const snappedX = Math.round((hit.x + dragOffset.current.x) * 2) / 2;
+        const snappedZ = Math.round((hit.z + dragOffset.current.z) * 2) / 2;
+        const current = useProjectStore.getState().project?.scenes[sceneId]?.objects[obj.id];
+        if (current) {
+          setObjectTransform(sceneId, obj.id, {
+            ...current.transform,
+            position: { x: snappedX, y: current.transform.position.y, z: snappedZ },
+          });
+        }
+      }
+    };
+
+    const cleanup = () => {
+      isDragging.current = false;
+      dragStartPos.current = null;
+      if (controls) (controls as any).enabled = true;
+      gl.domElement.removeEventListener('pointermove', onMove);
+      gl.domElement.removeEventListener('pointerup', onUp);
+      gl.domElement.removeEventListener('contextmenu', onCancel);
+    };
+
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button === 0 && isDragging.current) {
+        // Commit the move (already saved via setObjectTransform)
+        cleanup();
+      }
+    };
+
+    const onCancel = (ev: MouseEvent) => {
+      ev.preventDefault();
+      if (isDragging.current && dragStartPos.current) {
+        // Revert to original position
+        const current = useProjectStore.getState().project?.scenes[sceneId]?.objects[obj.id];
+        if (current) {
+          setObjectTransform(sceneId, obj.id, {
+            ...current.transform,
+            position: { ...dragStartPos.current },
+          });
+        }
+      }
+      cleanup();
+    };
+
+    gl.domElement.addEventListener('pointermove', onMove);
+    gl.domElement.addEventListener('pointerup', onUp);
+    gl.domElement.addEventListener('contextmenu', onCancel);
+  };
+
   const handleClick = (e: any) => {
     e.stopPropagation();
     selectObject(obj.id);
@@ -337,7 +438,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
         )}
 
         {/* Visual indicator sphere */}
-        <mesh ref={meshCallback as any} scale={scale} onClick={handleClick}>
+        <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
           <sphereGeometry args={[0.2, 16, 16]} />
           <meshBasicMaterial color={lightColor} wireframe={isWireframe} />
         </mesh>
@@ -408,7 +509,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
       <>
         <group position={pos} rotation={rotation}>
           {/* Camera body */}
-          <mesh ref={meshCallback as any} scale={scale} onClick={handleClick}>
+          <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
             <coneGeometry args={[0.2, 0.4, 4]} />
             <meshStandardMaterial color={camColor} roughness={0.5} wireframe={isWireframe} />
           </mesh>
@@ -463,6 +564,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
             anchorX="center"
             anchorY="middle"
             onClick={handleClick}
+            onPointerDown={handlePointerDown}
           >
             {displayText}
           </DreiText>
@@ -491,6 +593,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
           isWireframe={isWireframe}
           meshCallback={meshCallback}
           onClick={handleClick}
+          onPointerDown={handlePointerDown}
         />
         {gizmoElement}
       </>
@@ -502,7 +605,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     return (
       <>
         <group position={pos}>
-          <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick}>
+          <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick} onPointerDown={handlePointerDown}>
             <sphereGeometry args={[1, 16, 16]} />
             <meshStandardMaterial color="#f97316" roughness={0.4} wireframe={isWireframe} />
           </mesh>
@@ -532,7 +635,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
         <>
           <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation}>
             <Suspense fallback={<GltfFallback />}>
-              <GltfModel url={asset.url} onClick={handleClick} />
+              <GltfModel url={asset.url} onClick={handleClick} onPointerDown={handlePointerDown} />
             </Suspense>
             {isSelected && (
               <Html center position={[0, 2.2, 0]} style={{ pointerEvents: 'none' }}>
@@ -554,6 +657,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
             scale={scale}
             rotation={rotation}
             onClick={handleClick}
+            onPointerDown={handlePointerDown}
           >
             <planeGeometry args={[1, 1]} />
             <meshStandardMaterial color="#ffffff" side={2} wireframe={isWireframe} />
@@ -592,6 +696,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
         scale={scale}
         rotation={rotation}
         onClick={handleClick}
+        onPointerDown={handlePointerDown}
         castShadow
         receiveShadow
       >
