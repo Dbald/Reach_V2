@@ -283,8 +283,8 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   const dragOffset = useRef(new THREE.Vector3());
 
   const handlePointerDown = (e: any) => {
-    // Left-click on selected object starts drag (select or move mode)
-    if (e.button !== 0 || !isSelected || (activeTool !== 'select' && activeTool !== 'move')) return;
+    // Left-click on selected object starts drag (only in select mode)
+    if (e.button !== 0 || !isSelected || activeTool !== 'select') return;
     e.stopPropagation();
 
     // Save original position for cancel
@@ -312,9 +312,8 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
     isDragging.current = true;
 
-    // Disable orbit controls and transform gizmo during drag
+    // Disable orbit controls during drag
     if (controls) (controls as any).enabled = false;
-    if (transformRef.current) (transformRef.current as any).enabled = false;
 
     // Attach window-level listeners for move/up/cancel
     const onMove = (ev: PointerEvent) => {
@@ -342,7 +341,6 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
       isDragging.current = false;
       dragStartPos.current = null;
       if (controls) (controls as any).enabled = true;
-      if (transformRef.current) (transformRef.current as any).enabled = true;
       gl.domElement.removeEventListener('pointermove', onMove);
       gl.domElement.removeEventListener('pointerup', onUp);
       gl.domElement.removeEventListener('contextmenu', onCancel);
