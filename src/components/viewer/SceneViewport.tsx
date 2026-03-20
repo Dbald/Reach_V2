@@ -1,12 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport, Environment } from '@react-three/drei';
 import { useProjectStore } from '@/store';
 import type { RenderMode } from '@/store/projectStore';
 import { SceneObjects } from './SceneObjects';
 import { ZoneVisualizer } from './ZoneVisualizer';
 import { FirstPersonControls } from './FirstPersonControls';
+import type { Scene } from '@/types';
 
 export const SceneViewport: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -86,6 +87,7 @@ export const SceneViewport: React.FC = () => {
         {viewMode === 'editor' && (
           <>
             <OrbitControls makeDefault />
+            <CameraFocus scene={scene} />
             <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
               <GizmoViewport labelColor="white" axisHeadScale={1} />
             </GizmoHelper>
@@ -124,6 +126,61 @@ export const SceneViewport: React.FC = () => {
       )}
     </div>
   );
+};
+
+/** Smoothly moves the camera to focus on a selected object when "/" is pressed */
+const CameraFocus: React.FC<{ scene: Scene }> = ({ scene }) => {
+  const { camera, controls } = useThree();
+  const focusTargetId = useProjectStore((s) => s.editor.focusTargetId);
+  const clearFocusTarget = useProjectStore((s) => s.clearFocusTarget);
+  const targetPos = useRef(new THREE.Vector3());
+  const animating = useRef(false);
+  const startCamPos = useRef(new THREE.Vector3());
+  const endCamPos = useRef(new THREE.Vector3());
+  const progress = useRef(0);
+
+  useEffect(() => {
+    if (!focusTargetId) return;
+    const obj = scene.objects[focusTargetId];
+    if (!obj) { clearFocusTarget(); return; }
+
+    const objPos = new THREE.Vector3(
+      obj.transform.position.x,
+      obj.transform.position.y,
+      obj.transform.position.z
+    );
+    targetPos.current.copy(objPos);
+
+    // Position camera at an offset from the object
+    const offset = new THREE.Vector3(3, 2, 3);
+    endCamPos.current.copy(objPos).add(offset);
+    startCamPos.current.copy(camera.position);
+    progress.current = 0;
+    animating.current = true;
+  }, [focusTargetId, scene, camera, clearFocusTarget]);
+
+  useFrame((_, delta) => {
+    if (!animating.current) return;
+
+    progress.current = Math.min(progress.current + delta * 3, 1);
+    const t = 1 - Math.pow(1 - progress.current, 3); // ease-out cubic
+
+    camera.position.lerpVectors(startCamPos.current, endCamPos.current, t);
+
+    // Update OrbitControls target
+    const orbitControls = controls as any;
+    if (orbitControls?.target) {
+      orbitControls.target.lerp(targetPos.current, t);
+      orbitControls.update();
+    }
+
+    if (progress.current >= 1) {
+      animating.current = false;
+      clearFocusTarget();
+    }
+  });
+
+  return null;
 };
 
 /** Floating transform tool buttons on the canvas - vertical column under Edit Mode */

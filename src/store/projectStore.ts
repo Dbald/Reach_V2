@@ -30,6 +30,7 @@ interface EditorState {
   showHierarchy: boolean;
   showInspector: boolean;
   showAssetTray: boolean;
+  focusTargetId: string | null;
 }
 
 const MAX_UNDO = 50;
@@ -76,6 +77,8 @@ interface ProjectStore {
   setPlacementType: (type: PlacementType) => void;
   setPlacementSettings: (settings: Record<string, unknown>) => void;
   setRenderMode: (mode: RenderMode) => void;
+  focusOnSelected: () => void;
+  clearFocusTarget: () => void;
   setViewMode: (mode: EditorState['viewMode']) => void;
   togglePanel: (panel: 'showHierarchy' | 'showInspector' | 'showAssetTray') => void;
 
@@ -90,6 +93,7 @@ const defaultEditorState: EditorState = {
   placementType: null,
   placementSettings: {},
   renderMode: 'lit' as RenderMode,
+  focusTargetId: null,
   viewMode: 'editor',
   showGrid: true,
   showHierarchy: true,
@@ -350,6 +354,21 @@ export const useProjectStore = create<ProjectStore>()(
     setRenderMode: (mode) => {
       set((state) => {
         state.editor.renderMode = mode;
+      });
+    },
+
+    focusOnSelected: () => {
+      const { editor } = get();
+      if (editor.selectedObjectId) {
+        set((state) => {
+          state.editor.focusTargetId = editor.selectedObjectId;
+        });
+      }
+    },
+
+    clearFocusTarget: () => {
+      set((state) => {
+        state.editor.focusTargetId = null;
       });
     },
 

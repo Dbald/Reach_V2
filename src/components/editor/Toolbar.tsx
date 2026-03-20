@@ -25,6 +25,7 @@ export const Toolbar: React.FC = () => {
   const projectName = useProjectStore((s) => s.project?.name ?? 'Untitled');
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
+  const focusOnSelected = useProjectStore((s) => s.focusOnSelected);
   const undoAvailable = useProjectStore((s) => s._undoStack.length > 0);
   const redoAvailable = useProjectStore((s) => s._redoStack.length > 0);
   const [showPublish, setShowPublish] = useState(false);
@@ -43,12 +44,17 @@ export const Toolbar: React.FC = () => {
       }
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === '/') {
+        e.preventDefault();
+        focusOnSelected();
+        return;
+      }
       const tool = shortcutMap[e.key.toLowerCase()];
       if (tool) { e.preventDefault(); setActiveTool(tool); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setActiveTool, undo, redo]);
+  }, [setActiveTool, undo, redo, focusOnSelected]);
 
   return (
     <div style={styles.bar}>
