@@ -370,20 +370,77 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
   // --- Camera ---
   if (obj.type === 'camera') {
+    const fov = (obj.metadata?.fov as number) ?? 60;
+    const isEntry = (obj.metadata?.isEntry as boolean) ?? false;
+    const camColor = isEntry ? '#22c55e' : '#06b6d4';
+
+    // Compute frustum lines from FOV
+    const near = 0.3;
+    const far = 3;
+    const aspect = 16 / 9;
+    const halfFovRad = (fov / 2) * (Math.PI / 180);
+    const nearH = Math.tan(halfFovRad) * near;
+    const nearW = nearH * aspect;
+    const farH = Math.tan(halfFovRad) * far;
+    const farW = farH * aspect;
+
+    // Frustum corners (camera looks down -Z in local space, but our cone points down -Y)
+    // We'll orient the frustum forward along -Z
+    const frustumPoints = new Float32Array([
+      // Near plane edges
+      -nearW, nearH, -near,   nearW, nearH, -near,
+      nearW, nearH, -near,    nearW, -nearH, -near,
+      nearW, -nearH, -near,  -nearW, -nearH, -near,
+      -nearW, -nearH, -near, -nearW, nearH, -near,
+      // Far plane edges
+      -farW, farH, -far,   farW, farH, -far,
+      farW, farH, -far,    farW, -farH, -far,
+      farW, -farH, -far,  -farW, -farH, -far,
+      -farW, -farH, -far, -farW, farH, -far,
+      // Connecting lines (near to far corners)
+      -nearW, nearH, -near,  -farW, farH, -far,
+      nearW, nearH, -near,    farW, farH, -far,
+      nearW, -nearH, -near,   farW, -farH, -far,
+      -nearW, -nearH, -near, -farW, -farH, -far,
+    ]);
+
     return (
       <>
         <group position={pos} rotation={rotation}>
+          {/* Camera body */}
           <mesh ref={meshCallback as any} scale={scale} onClick={handleClick}>
             <coneGeometry args={[0.2, 0.4, 4]} />
-            <meshStandardMaterial color="#06b6d4" roughness={0.5} wireframe={isWireframe} />
+            <meshStandardMaterial color={camColor} roughness={0.5} wireframe={isWireframe} />
           </mesh>
           <mesh position={[0, -0.25, 0]}>
             <cylinderGeometry args={[0.08, 0.12, 0.1, 16]} />
-            <meshBasicMaterial color="#0891b2" wireframe={isWireframe} />
+            <meshBasicMaterial color={camColor} wireframe={isWireframe} />
           </mesh>
+
+          {/* FOV frustum wireframe */}
+          <lineSegments>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                args={[frustumPoints, 3]}
+              />
+            </bufferGeometry>
+            <lineBasicMaterial color={camColor} transparent opacity={isSelected ? 0.6 : 0.25} />
+          </lineSegments>
+
+          {/* Active camera indicator */}
+          {isEntry && (
+            <mesh position={[0, 0.4, 0]}>
+              <sphereGeometry args={[0.06, 8, 8]} />
+              <meshBasicMaterial color="#22c55e" />
+            </mesh>
+          )}
+
           {isSelected && (
-            <Html center position={[0, 0.5, 0]} style={{ pointerEvents: 'none' }}>
-              <div style={labelStyle('#06b6d4')}>{obj.name}</div>
+            <Html center position={[0, 0.6, 0]} style={{ pointerEvents: 'none' }}>
+              <div style={labelStyle(camColor)}>
+                {obj.name}{isEntry ? ' (active)' : ''}
+              </div>
             </Html>
           )}
         </group>
