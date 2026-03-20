@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProjectStore } from '@/store';
-import type { PlacementType } from '@/store/projectStore';
+import type { PlacementType, ZonePreset } from '@/store/projectStore';
 import type { EnvironmentConfig } from '@/types';
 
 const categories: { id: PlacementType; label: string; desc: string; icon: string }[] = [
@@ -296,90 +296,155 @@ const defaultY: Record<string, number> = {
 
 /* ---------- Zone Settings ---------- */
 
+const zonePresets: { id: ZonePreset; label: string; desc: string; color: string; icon: string }[] = [
+  { id: 'walkable',  label: 'Walkable',  desc: 'Area players can walk in',   color: '#22c55e', icon: '\u{1F6B6}' },
+  { id: 'collision',  label: 'Collision', desc: 'Blocks player movement',     color: '#ef4444', icon: '\u{1F6AB}' },
+  { id: 'custom',    label: 'Custom',    desc: 'Set your own properties',     color: '#3b82f6', icon: '\u2699'    },
+];
+
 const ZoneSettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
-  const addZone = useProjectStore((s) => s.addZone);
+  const zoneDraw = useProjectStore((s) => s.editor.zoneDraw);
+  const startZoneDraw = useProjectStore((s) => s.startZoneDraw);
+  const cancelZoneDraw = useProjectStore((s) => s.cancelZoneDraw);
+  const updateZoneDraw = useProjectStore((s) => s.updateZoneDraw);
 
-  const [name, setName] = useState('');
-  const [sizeX, setSizeX] = useState(4);
-  const [sizeY, setSizeY] = useState(2.5);
-  const [sizeZ, setSizeZ] = useState(4);
-  const [walkable, setWalkable] = useState(true);
-  const [hasCollision, setHasCollision] = useState(false);
-  const [color, setColor] = useState('#22c55e');
-
-  const handleAddNow = () => {
-    if (!activeSceneId) return;
-    const zoneCount = Object.keys(
-      useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
-    ).length;
-    const zoneName = name || `Zone ${zoneCount + 1}`;
-    const r = parseInt(color.slice(1, 3), 16) / 255;
-    const g = parseInt(color.slice(3, 5), 16) / 255;
-    const b = parseInt(color.slice(5, 7), 16) / 255;
-    addZone(activeSceneId, {
-      name: zoneName,
-      shape: 'box',
-      points: [{ x: 0, y: 0, z: 0 }],
-      size: { x: sizeX, y: sizeY, z: sizeZ },
-      walkable,
-      hasCollision,
-      label: zoneName,
-      color: { r, g, b, a: 0.15 },
-    });
+  const handleBack = () => {
+    cancelZoneDraw();
+    onBack();
   };
+
+  // If not actively drawing, show preset selection
+  if (!zoneDraw.active) {
+    return (
+      <div style={styles.settingsPanel}>
+        <button style={styles.backBtn} onClick={handleBack}>&larr; Back</button>
+        <div style={styles.catHeader}>
+          <span style={styles.catIcon}>{'\u25A3'}</span>
+          <span style={styles.catLabel}>Zone</span>
+        </div>
+
+        <div style={styles.sectionTitle}>Zone Type</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {zonePresets.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => startZoneDraw(p.id, {})}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid #334155',
+                background: '#0a0a1a',
+                color: '#e2e8f0',
+                cursor: 'pointer',
+                textAlign: 'left' as const,
+              }}
+            >
+              <span style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{p.icon}</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 12, color: p.color }}>{p.label}</div>
+                <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{p.desc}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Active draw mode — show settings and instructions
+  const presetInfo = zonePresets.find((p) => p.id === zoneDraw.preset)!;
+  const step = zoneDraw.corner1 ? 2 : 1;
 
   return (
     <div style={styles.settingsPanel}>
-      <button style={styles.backBtn} onClick={onBack}>&larr; Back</button>
+      <button style={styles.backBtn} onClick={handleBack}>&larr; Back</button>
       <div style={styles.catHeader}>
-        <span style={styles.catIcon}>{'\u25A3'}</span>
-        <span style={styles.catLabel}>Zone</span>
+        <span style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{presetInfo.icon}</span>
+        <span style={{ ...styles.catLabel, color: zoneDraw.color }}>{presetInfo.label} Zone</span>
       </div>
 
+      {/* Draw instructions */}
+      <div style={{
+        padding: '10px 12px',
+        borderRadius: 8,
+        background: `${zoneDraw.color}15`,
+        border: `1px solid ${zoneDraw.color}40`,
+        marginBottom: 12,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: zoneDraw.color, marginBottom: 4 }}>
+          Step {step} of 2
+        </div>
+        <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+          {step === 1
+            ? 'Click on the ground to set the first corner of the zone.'
+            : 'Move your mouse and click to set the opposite corner.'}
+        </div>
+      </div>
+
+      {/* Name */}
       <div style={styles.fieldGroup}>
         <label style={styles.fieldLabel}>Name</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Zone" style={styles.input} />
+        <input
+          value={zoneDraw.name}
+          onChange={(e) => updateZoneDraw({ name: e.target.value })}
+          placeholder="Zone"
+          style={styles.input}
+        />
       </div>
 
-      <div style={styles.sectionTitle}>Size</div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        {[
-          { label: 'W', value: sizeX, set: setSizeX },
-          { label: 'H', value: sizeY, set: setSizeY },
-          { label: 'D', value: sizeZ, set: setSizeZ },
-        ].map((s) => (
-          <div key={s.label} style={{ flex: 1 }}>
-            <label style={{ fontSize: 9, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 2 }}>{s.label}</label>
-            <input type="number" step={0.5} min={0.5} value={s.value} onChange={(e) => s.set(parseFloat(e.target.value) || 1)} style={styles.numInput} />
-          </div>
-        ))}
+      {/* Height */}
+      <div style={styles.fieldGroup}>
+        <label style={styles.fieldLabel}>Height</label>
+        <input
+          type="number"
+          step={0.5}
+          min={0.5}
+          value={zoneDraw.height}
+          onChange={(e) => updateZoneDraw({ height: parseFloat(e.target.value) || 2.5 })}
+          style={styles.numInput}
+        />
       </div>
 
-      <div style={{ ...styles.fieldGroup, marginTop: 10 }}>
+      {/* Properties */}
+      <div style={{ ...styles.fieldGroup, marginTop: 6 }}>
         <label style={styles.checkRow}>
-          <input type="checkbox" checked={walkable} onChange={(e) => setWalkable(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={zoneDraw.walkable}
+            onChange={(e) => updateZoneDraw({ walkable: e.target.checked })}
+          />
           <span>Walkable</span>
         </label>
         <label style={styles.checkRow}>
-          <input type="checkbox" checked={hasCollision} onChange={(e) => setHasCollision(e.target.checked)} />
-          <span>Has Collision</span>
+          <input
+            type="checkbox"
+            checked={zoneDraw.hasCollision}
+            onChange={(e) => updateZoneDraw({ hasCollision: e.target.checked })}
+          />
+          <span>Collision</span>
         </label>
       </div>
 
+      {/* Color */}
       <div style={styles.fieldGroup}>
         <label style={styles.fieldLabel}>Color</label>
-        <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={styles.colorInput} />
+        <input
+          type="color"
+          value={zoneDraw.color}
+          onChange={(e) => updateZoneDraw({ color: e.target.value })}
+          style={styles.colorInput}
+        />
       </div>
 
-      <div style={styles.addActions}>
-        <button onClick={handleAddNow} style={styles.addBtn}>
-          Add at Origin
-        </button>
-        <div style={styles.hint}>
-          or click on the ground to place
-        </div>
-      </div>
+      <button
+        onClick={handleBack}
+        style={{ ...styles.addBtn, background: '#334155', marginTop: 8 }}
+      >
+        Cancel Drawing
+      </button>
     </div>
   );
 };

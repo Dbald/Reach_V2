@@ -285,7 +285,7 @@ const RenderModeSelector: React.FC = () => {
   );
 };
 
-/** Hover feedback ring shown when placement tool is active */
+/** Hover feedback ring shown when placement tool is active (non-zone) */
 const PlacementPreview: React.FC<{ hoverPos: THREE.Vector3 | null; placementType: string | null }> = ({ hoverPos, placementType }) => {
   const ringRef = useRef<THREE.Mesh>(null);
 
@@ -295,30 +295,123 @@ const PlacementPreview: React.FC<{ hoverPos: THREE.Vector3 | null; placementType
     }
   });
 
-  if (!hoverPos || !placementType) return null;
-
-  const color = placementType === 'zone' ? '#22c55e' : '#3b82f6';
+  if (!hoverPos || !placementType || placementType === 'zone') return null;
 
   return (
     <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[0.35, 0.45, 32]} />
-      <meshBasicMaterial color={color} transparent opacity={0.6} side={2} />
+      <meshBasicMaterial color="#3b82f6" transparent opacity={0.6} side={2} />
     </mesh>
   );
 };
 
-/** Click on empty space: deselect, place object, or create zone based on active tool */
+/** Live preview of zone being drawn on the ground */
+const ZoneDrawPreview: React.FC = () => {
+  const zoneDraw = useProjectStore((s) => s.editor.zoneDraw);
+
+  if (!zoneDraw.active) return null;
+
+  const { corner1, hoverPos, color, height } = zoneDraw;
+
+  // Before first click: show a crosshair at hover
+  if (!corner1 && hoverPos) {
+    return (
+      <group position={[hoverPos.x, 0.02, hoverPos.z]}>
+        {/* Crosshair lines */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.3, 0.4, 4]} />
+          <meshBasicMaterial color={color} transparent opacity={0.7} side={2} />
+        </mesh>
+        {/* Center dot */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.1, 16]} />
+          <meshBasicMaterial color={color} transparent opacity={0.9} side={2} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // After first click: show the rectangle being drawn
+  if (corner1 && hoverPos) {
+    const x1 = corner1.x, z1 = corner1.z;
+    const x2 = hoverPos.x, z2 = hoverPos.z;
+    const cx = (x1 + x2) / 2;
+    const cz = (z1 + z2) / 2;
+    const sx = Math.abs(x2 - x1) || 0.1;
+    const sz = Math.abs(z2 - z1) || 0.1;
+
+    return (
+      <group>
+        {/* Ground fill */}
+        <mesh position={[cx, 0.03, cz]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[sx, sz]} />
+          <meshBasicMaterial color={color} transparent opacity={0.15} side={2} />
+        </mesh>
+
+        {/* Ground border */}
+        <mesh position={[cx, 0.04, cz]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0, 0, 0]} />
+          <meshBasicMaterial color={color} />
+        </mesh>
+        <lineSegments position={[cx, 0.04, cz]} rotation={[-Math.PI / 2, 0, 0]}>
+          <edgesGeometry args={[new THREE.PlaneGeometry(sx, sz)]} />
+          <lineBasicMaterial color={color} linewidth={2} />
+        </lineSegments>
+
+        {/* Height preview (semi-transparent walls) */}
+        <mesh position={[cx, height / 2, cz]}>
+          <boxGeometry args={[sx, height, sz]} />
+          <meshBasicMaterial color={color} transparent opacity={0.08} side={2} />
+        </mesh>
+        <lineSegments position={[cx, height / 2, cz]}>
+          <edgesGeometry args={[new THREE.BoxGeometry(sx, height, sz)]} />
+          <lineBasicMaterial color={color} transparent opacity={0.4} />
+        </lineSegments>
+
+        {/* Corner markers */}
+        {/* First corner (set) */}
+        <mesh position={[x1, 0.05, z1]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.15, 16]} />
+          <meshBasicMaterial color={color} transparent opacity={0.9} side={2} />
+        </mesh>
+        {/* Second corner (current hover) */}
+        <mesh position={[x2, 0.05, z2]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.1, 0.18, 16]} />
+          <meshBasicMaterial color={color} transparent opacity={0.7} side={2} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // First corner set but no hover yet
+  if (corner1) {
+    return (
+      <mesh position={[corner1.x, 0.05, corner1.z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.15, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={0.9} side={2} />
+      </mesh>
+    );
+  }
+
+  return null;
+};
+
+/** Click on empty space: deselect, place object, or draw zone */
 const GroundInteraction: React.FC = () => {
   const selectObject = useProjectStore((s) => s.selectObject);
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const placementType = useProjectStore((s) => s.editor.placementType);
   const placementSettings = useProjectStore((s) => s.editor.placementSettings);
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
-  const addZone = useProjectStore((s) => s.addZone);
   const addObject = useProjectStore((s) => s.addObject);
+  const zoneDraw = useProjectStore((s) => s.editor.zoneDraw);
+  const setZoneDrawHover = useProjectStore((s) => s.setZoneDrawHover);
+  const setZoneDrawCorner1 = useProjectStore((s) => s.setZoneDrawCorner1);
+  const finishZoneDraw = useProjectStore((s) => s.finishZoneDraw);
   const [hoverPos, setHoverPos] = useState<THREE.Vector3 | null>(null);
 
-  const isPlacing = activeTool === 'place' && placementType && placementType !== 'sky';
+  const isPlacing = activeTool === 'place' && placementType && placementType !== 'sky' && placementType !== 'zone';
+  const isZoneDrawing = zoneDraw.active;
 
   const buildMetadata = (): Record<string, unknown> => {
     if (!placementType) return {};
@@ -345,60 +438,46 @@ const GroundInteraction: React.FC = () => {
   return (
     <>
       <PlacementPreview hoverPos={isPlacing ? hoverPos : null} placementType={placementType} />
+      <ZoneDrawPreview />
       <mesh
         position={[0, -0.05, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         onPointerMove={(e) => {
+          const p = e.point;
+          const sx = Math.round(p.x * 2) / 2;
+          const sz = Math.round(p.z * 2) / 2;
           if (isPlacing) {
-            const p = e.point;
-            setHoverPos(new THREE.Vector3(Math.round(p.x * 2) / 2, 0, Math.round(p.z * 2) / 2));
+            setHoverPos(new THREE.Vector3(sx, 0, sz));
+          }
+          if (isZoneDrawing) {
+            setZoneDrawHover({ x: sx, z: sz });
           }
         }}
-        onPointerLeave={() => setHoverPos(null)}
+        onPointerLeave={() => {
+          setHoverPos(null);
+          if (isZoneDrawing) setZoneDrawHover(null);
+        }}
         onClick={(e) => {
           if (!activeSceneId) return;
           const point = e.point;
           const snappedX = Math.round(point.x * 2) / 2;
           const snappedZ = Math.round(point.z * 2) / 2;
 
-          // Zone placement via Add panel
-          if (activeTool === 'place' && placementType === 'zone') {
-            const zoneCount = Object.keys(
-              useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
-            ).length;
-            addZone(activeSceneId, {
-              name: `Zone ${zoneCount + 1}`,
-              shape: 'box',
-              points: [{ x: snappedX, y: 0, z: snappedZ }],
-              size: { x: 4, y: 2.5, z: 4 },
-              walkable: true,
-              hasCollision: false,
-              label: `Zone ${zoneCount + 1}`,
-              color: { r: 0.13, g: 0.77, b: 0.37, a: 0.15 },
-            });
+          // Zone drawing: two-click flow
+          if (isZoneDrawing) {
+            if (!zoneDraw.corner1) {
+              setZoneDrawCorner1({ x: snappedX, z: snappedZ });
+            } else {
+              // Set hover to final position and finish
+              setZoneDrawHover({ x: snappedX, z: snappedZ });
+              // Small delay to ensure state updates
+              setTimeout(() => finishZoneDraw(), 0);
+            }
             return;
           }
 
-          // Legacy zone tool
-          if (activeTool === 'zone') {
-            const zoneCount = Object.keys(
-              useProjectStore.getState().project?.scenes[activeSceneId]?.zones ?? {}
-            ).length;
-            addZone(activeSceneId, {
-              name: `Zone ${zoneCount + 1}`,
-              shape: 'box',
-              points: [{ x: snappedX, y: 0, z: snappedZ }],
-              size: { x: 4, y: 2.5, z: 4 },
-              walkable: true,
-              hasCollision: false,
-              label: `Zone ${zoneCount + 1}`,
-              color: { r: 0.13, g: 0.77, b: 0.37, a: 0.15 },
-            });
-            return;
-          }
-
-          if (activeTool === 'place' && placementType && placementType !== 'sky') {
-            const def = placementDefaults[placementType];
+          if (isPlacing) {
+            const def = placementDefaults[placementType!];
             if (!def) return;
             const scene = useProjectStore.getState().project?.scenes[activeSceneId];
             const count = scene ? Object.values(scene.objects).filter((o) => o.type === def.type).length : 0;

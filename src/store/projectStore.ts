@@ -17,6 +17,19 @@ import { createProject, defaultTransform } from '@/utils/defaults';
 
 export type PlacementType = 'object' | 'light' | 'camera' | 'text' | 'video' | 'audio' | 'sky' | 'zone' | null;
 export type RenderMode = 'lit' | 'unlit' | 'wireframe';
+export type ZonePreset = 'walkable' | 'collision' | 'custom';
+
+export interface ZoneDrawState {
+  active: boolean;
+  preset: ZonePreset;
+  corner1: { x: number; z: number } | null;
+  hoverPos: { x: number; z: number } | null;
+  name: string;
+  height: number;
+  color: string;
+  walkable: boolean;
+  hasCollision: boolean;
+}
 
 interface EditorState {
   selectedObjectId: string | null;
@@ -32,6 +45,7 @@ interface EditorState {
   showAssetTray: boolean;
   focusTargetId: string | null;
   isFocused: boolean;
+  zoneDraw: ZoneDrawState;
 }
 
 const MAX_UNDO = 50;
@@ -84,6 +98,14 @@ interface ProjectStore {
   setViewMode: (mode: EditorState['viewMode']) => void;
   togglePanel: (panel: 'showHierarchy' | 'showInspector' | 'showAssetTray') => void;
 
+  // Zone drawing
+  startZoneDraw: (preset: ZonePreset, opts: Partial<ZoneDrawState>) => void;
+  setZoneDrawHover: (pos: { x: number; z: number } | null) => void;
+  setZoneDrawCorner1: (pos: { x: number; z: number }) => void;
+  finishZoneDraw: () => void;
+  cancelZoneDraw: () => void;
+  updateZoneDraw: (updates: Partial<ZoneDrawState>) => void;
+
   // Validation
   setValidationReport: (report: ValidationReport | null) => void;
 }
@@ -97,6 +119,17 @@ const defaultEditorState: EditorState = {
   renderMode: 'lit' as RenderMode,
   focusTargetId: null,
   isFocused: false,
+  zoneDraw: {
+    active: false,
+    preset: 'walkable' as ZonePreset,
+    corner1: null,
+    hoverPos: null,
+    name: '',
+    height: 2.5,
+    color: '#22c55e',
+    walkable: true,
+    hasCollision: false,
+  },
   viewMode: 'editor',
   showGrid: true,
   showHierarchy: true,
@@ -400,6 +433,96 @@ export const useProjectStore = create<ProjectStore>()(
     togglePanel: (panel) => {
       set((state) => {
         state.editor[panel] = !state.editor[panel];
+      });
+    },
+
+    // --- Zone drawing ---
+    startZoneDraw: (preset, opts) => {
+      set((state) => {
+        const defaults: Record<ZonePreset, { color: string; walkable: boolean; hasCollision: boolean }> = {
+          walkable:  { color: '#22c55e', walkable: true,  hasCollision: false },
+          collision: { color: '#ef4444', walkable: false, hasCollision: true  },
+          custom:    { color: '#3b82f6', walkable: true,  hasCollision: false },
+        };
+        const d = defaults[preset];
+        state.editor.zoneDraw = {
+          active: true,
+          preset,
+          corner1: null,
+          hoverPos: null,
+          name: opts.name ?? '',
+          height: opts.height ?? 2.5,
+          color: opts.color ?? d.color,
+          walkable: opts.walkable ?? d.walkable,
+          hasCollision: opts.hasCollision ?? d.hasCollision,
+        };
+        state.editor.activeTool = 'place';
+        state.editor.placementType = 'zone';
+      });
+    },
+
+    setZoneDrawHover: (pos) => {
+      set((state) => {
+        state.editor.zoneDraw.hoverPos = pos;
+      });
+    },
+
+    setZoneDrawCorner1: (pos) => {
+      set((state) => {
+        state.editor.zoneDraw.corner1 = pos;
+      });
+    },
+
+    finishZoneDraw: () => {
+      const { editor } = get();
+      const zd = editor.zoneDraw;
+      if (!zd.corner1 || !zd.hoverPos || !editor.activeSceneId) return;
+
+      const x1 = zd.corner1.x, z1 = zd.corner1.z;
+      const x2 = zd.hoverPos.x, z2 = zd.hoverPos.z;
+      const cx = (x1 + x2) / 2;
+      const cz = (z1 + z2) / 2;
+      const sx = Math.abs(x2 - x1) || 1;
+      const sz = Math.abs(z2 - z1) || 1;
+
+      const r = parseInt(zd.color.slice(1, 3), 16) / 255;
+      const g = parseInt(zd.color.slice(3, 5), 16) / 255;
+      const b = parseInt(zd.color.slice(5, 7), 16) / 255;
+
+      const sceneId = editor.activeSceneId;
+      const zoneCount = Object.keys(get().project?.scenes[sceneId]?.zones ?? {}).length;
+      const zoneName = zd.name || `Zone ${zoneCount + 1}`;
+
+      get().addZone(sceneId, {
+        name: zoneName,
+        shape: 'box',
+        points: [{ x: cx, y: 0, z: cz }],
+        size: { x: sx, y: zd.height, z: sz },
+        walkable: zd.walkable,
+        hasCollision: zd.hasCollision,
+        label: zoneName,
+        color: { r, g, b, a: 0.15 },
+      });
+
+      // Reset draw state but keep active for another draw
+      set((state) => {
+        state.editor.zoneDraw.corner1 = null;
+        state.editor.zoneDraw.hoverPos = null;
+      });
+    },
+
+    cancelZoneDraw: () => {
+      set((state) => {
+        state.editor.zoneDraw = {
+          active: false, preset: 'walkable', corner1: null, hoverPos: null,
+          name: '', height: 2.5, color: '#22c55e', walkable: true, hasCollision: false,
+        };
+      });
+    },
+
+    updateZoneDraw: (updates) => {
+      set((state) => {
+        Object.assign(state.editor.zoneDraw, updates);
       });
     },
 
