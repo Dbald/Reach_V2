@@ -367,6 +367,11 @@ export const useProjectStore = create<ProjectStore>()(
     selectObject: (objectId) => {
       set((state) => {
         state.editor.selectedObjectId = objectId;
+        // Close add panel when selecting an object
+        if (objectId && state.editor.activeTool === 'place') {
+          state.editor.activeTool = 'select';
+          state.editor.placementType = null;
+        }
       });
     },
 
