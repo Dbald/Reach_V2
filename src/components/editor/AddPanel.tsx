@@ -33,10 +33,13 @@ export const AddPanel: React.FC = () => {
 
   if (activeTool !== 'place') return null;
 
+  // Once a type is selected, dock to the left as a compact sidebar
+  const isDocked = !!placementType;
+
   return (
-    <div style={styles.panel}>
+    <div style={isDocked ? styles.panelDocked : styles.panel}>
       <div style={styles.header}>
-        <span style={styles.title}>Add to Scene</span>
+        <span style={styles.title}>{isDocked ? '' : 'Add to Scene'}</span>
         <button style={styles.closeBtn} onClick={() => setActiveTool('select')}>&times;</button>
       </div>
 
@@ -544,6 +547,21 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#e2e8f0',
     fontSize: 12,
     overflow: 'hidden',
+  },
+  panelDocked: {
+    position: 'absolute',
+    top: 56,
+    right: 8,
+    width: 240,
+    maxHeight: 'calc(100vh - 120px)',
+    overflowY: 'auto',
+    background: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: 10,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+    zIndex: 100,
+    color: '#e2e8f0',
+    fontSize: 12,
   },
   header: {
     display: 'flex',
