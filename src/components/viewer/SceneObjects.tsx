@@ -284,6 +284,19 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   const dragOffset = useRef(new THREE.Vector3());
 
   const handlePointerDown = (e: any) => {
+    // Right-click opens context menu
+    if (e.button === 2) {
+      e.stopPropagation();
+      const nativeEvent = e.nativeEvent ?? e;
+      const clientX = nativeEvent.clientX ?? 0;
+      const clientY = nativeEvent.clientY ?? 0;
+      if (!selectedObjectIds.includes(obj.id)) {
+        selectObject(obj.id);
+      }
+      openContextMenu(clientX, clientY, obj.id);
+      return;
+    }
+
     // Left-click on selected object starts drag (only in select mode)
     if (e.button !== 0 || !isSelected || activeTool !== 'select') return;
     e.stopPropagation();
@@ -381,18 +394,6 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     selectObject(obj.id, shiftKey);
   };
 
-  const handleContextMenu = (e: any) => {
-    e.stopPropagation();
-    // Get screen coordinates for the context menu
-    const nativeEvent = e.nativeEvent ?? e;
-    const clientX = nativeEvent.clientX ?? 0;
-    const clientY = nativeEvent.clientY ?? 0;
-    if (!selectedObjectIds.includes(obj.id)) {
-      selectObject(obj.id);
-    }
-    openContextMenu(clientX, clientY, obj.id);
-  };
-
   const getColor = (): string => {
     if (obj.material?.color) {
       const c = obj.material.color;
@@ -453,7 +454,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
         )}
 
         {/* Visual indicator sphere */}
-        <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown} onContextMenu={handleContextMenu}>
+        <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
           <sphereGeometry args={[0.2, 16, 16]} />
           <meshBasicMaterial color={lightColor} wireframe={isWireframe} />
         </mesh>
@@ -524,7 +525,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
       <>
         <group position={pos} rotation={rotation}>
           {/* Camera body */}
-          <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown} onContextMenu={handleContextMenu}>
+          <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
             <coneGeometry args={[0.2, 0.4, 4]} />
             <meshStandardMaterial color={camColor} roughness={0.5} wireframe={isWireframe} />
           </mesh>
@@ -620,7 +621,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     return (
       <>
         <group position={pos}>
-          <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick} onPointerDown={handlePointerDown} onContextMenu={handleContextMenu}>
+          <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick} onPointerDown={handlePointerDown}>
             <sphereGeometry args={[1, 16, 16]} />
             <meshStandardMaterial color="#f97316" roughness={0.4} wireframe={isWireframe} />
           </mesh>
@@ -648,7 +649,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     if (asset && is3D && asset.url) {
       return (
         <>
-          <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation} onContextMenu={handleContextMenu}>
+          <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation}>
             <Suspense fallback={<GltfFallback />}>
               <GltfModel url={asset.url} onClick={handleClick} onPointerDown={handlePointerDown} />
             </Suspense>

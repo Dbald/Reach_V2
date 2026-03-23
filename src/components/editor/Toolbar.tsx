@@ -44,6 +44,27 @@ export const Toolbar: React.FC = () => {
       }
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // Shift+D: Duplicate selected objects
+      if (e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        const { editor } = useProjectStore.getState();
+        if (editor.selectedObjectIds.length > 0 && editor.activeSceneId) {
+          useProjectStore.getState().duplicateSelected(editor.activeSceneId);
+        }
+        return;
+      }
+
+      // Delete / Backspace: Delete selected objects
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        const { editor } = useProjectStore.getState();
+        if (editor.selectedObjectIds.length > 0 && editor.activeSceneId) {
+          useProjectStore.getState().deleteSelected(editor.activeSceneId);
+        }
+        return;
+      }
+
       if (e.key === '/') {
         e.preventDefault();
         focusOnSelected();
