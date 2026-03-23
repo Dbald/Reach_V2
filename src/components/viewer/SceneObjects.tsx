@@ -38,6 +38,7 @@ const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
   const pivotRef = useRef<THREE.Group>(null);
   const transformRef = useRef<any>(null);
   const isDragging = useRef(false);
+  const [pivotReady, setPivotReady] = useState(false);
 
   const gizmoMode = (() => {
     switch (activeTool) {
@@ -72,14 +73,22 @@ const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
   const originals = useRef<Map<string, { pos: THREE.Vector3; rot: THREE.Euler; scl: THREE.Vector3 }>>(new Map());
   const pivotStart = useRef<{ pos: THREE.Vector3; rot: THREE.Euler; scl: THREE.Vector3 } | null>(null);
 
-  // Keep pivot at centroid
+  // Reset pivot ready state when selection or mode changes so TransformControls re-attaches cleanly
+  useEffect(() => {
+    setPivotReady(false);
+  }, [selectedObjectIds.join(','), gizmoMode]);
+
+  // Keep pivot at centroid and signal ready after position is set
   useEffect(() => {
     if (pivotRef.current && centroid) {
       pivotRef.current.position.copy(centroid);
       pivotRef.current.rotation.set(0, 0, 0);
       pivotRef.current.scale.set(1, 1, 1);
+      pivotRef.current.updateMatrixWorld(true);
+      // Delay one frame so the group's world matrix is committed before TransformControls attaches
+      requestAnimationFrame(() => setPivotReady(true));
     }
-  }, [centroid]);
+  }, [centroid, selectedObjectIds.join(','), gizmoMode]);
 
   // Apply current pivot transform to all selected objects
   const applyGroupTransform = useCallback((setter: typeof setObjectTransform | typeof setObjectTransformLive) => {
@@ -224,7 +233,7 @@ const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
           <meshBasicMaterial color="#f59e0b" transparent opacity={0.7} />
         </mesh>
       </group>
-      {pivotRef.current && (
+      {pivotReady && pivotRef.current && (
         <TransformControls
           ref={transformRef}
           object={pivotRef.current}
