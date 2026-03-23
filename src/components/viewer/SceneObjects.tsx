@@ -23,7 +23,171 @@ export const SceneObjects: React.FC<SceneObjectsProps> = ({ scene, renderMode = 
       {objects.map((obj) => (
         <SceneObjectMesh key={obj.id} object={obj} sceneId={scene.id} renderMode={renderMode} />
       ))}
+      <GroupTransformGizmo scene={scene} />
     </group>
+  );
+};
+
+/** Group transform gizmo: when multiple objects are selected, places a single
+ *  TransformControls at the centroid and applies deltas to all selected objects. */
+const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
+  const selectedObjectIds = useProjectStore((s) => s.editor.selectedObjectIds);
+  const activeTool = useProjectStore((s) => s.editor.activeTool);
+  const setObjectTransform = useProjectStore((s) => s.setObjectTransform);
+  const pivotRef = useRef<THREE.Group>(null);
+  const transformRef = useRef<any>(null);
+
+  const gizmoMode = (() => {
+    switch (activeTool) {
+      case 'move': return 'translate' as const;
+      case 'rotate': return 'rotate' as const;
+      case 'scale': return 'scale' as const;
+      default: return null;
+    }
+  })();
+
+  // Get selected objects from scene
+  const selectedObjects = useMemo(() => {
+    return selectedObjectIds
+      .map((id) => scene.objects[id])
+      .filter(Boolean);
+  }, [selectedObjectIds, scene.objects]);
+
+  // Compute centroid of selected objects
+  const centroid = useMemo(() => {
+    if (selectedObjects.length < 2) return null;
+    const sum = { x: 0, y: 0, z: 0 };
+    for (const obj of selectedObjects) {
+      sum.x += obj.transform.position.x;
+      sum.y += obj.transform.position.y;
+      sum.z += obj.transform.position.z;
+    }
+    const n = selectedObjects.length;
+    return new THREE.Vector3(sum.x / n, sum.y / n, sum.z / n);
+  }, [selectedObjects]);
+
+  // Store original transforms when drag starts
+  const originals = useRef<Map<string, { pos: THREE.Vector3; rot: THREE.Euler; scl: THREE.Vector3 }>>(new Map());
+  const pivotStart = useRef<{ pos: THREE.Vector3; rot: THREE.Euler; scl: THREE.Vector3 } | null>(null);
+
+  // Keep pivot at centroid
+  useEffect(() => {
+    if (pivotRef.current && centroid) {
+      pivotRef.current.position.copy(centroid);
+      pivotRef.current.rotation.set(0, 0, 0);
+      pivotRef.current.scale.set(1, 1, 1);
+    }
+  }, [centroid]);
+
+  // Listen for TransformControls drag events
+  useEffect(() => {
+    const controls = transformRef.current;
+    if (!controls) return;
+
+    const onDragStart = () => {
+      if (!pivotRef.current) return;
+      // Snapshot original transforms
+      originals.current.clear();
+      for (const obj of selectedObjects) {
+        originals.current.set(obj.id, {
+          pos: new THREE.Vector3(obj.transform.position.x, obj.transform.position.y, obj.transform.position.z),
+          rot: new THREE.Euler(obj.transform.rotation.x, obj.transform.rotation.y, obj.transform.rotation.z),
+          scl: new THREE.Vector3(obj.transform.scale.x, obj.transform.scale.y, obj.transform.scale.z),
+        });
+      }
+      pivotStart.current = {
+        pos: pivotRef.current.position.clone(),
+        rot: pivotRef.current.rotation.clone(),
+        scl: pivotRef.current.scale.clone(),
+      };
+    };
+
+    const onDragEnd = () => {
+      if (!pivotRef.current || !pivotStart.current) return;
+      const pivot = pivotRef.current;
+      const start = pivotStart.current;
+
+      for (const obj of selectedObjects) {
+        const orig = originals.current.get(obj.id);
+        if (!orig) continue;
+
+        if (gizmoMode === 'translate') {
+          // Apply translation delta
+          const delta = new THREE.Vector3().subVectors(pivot.position, start.pos);
+          const newPos = orig.pos.clone().add(delta);
+          setObjectTransform(scene.id, obj.id, {
+            ...obj.transform,
+            position: { x: newPos.x, y: newPos.y, z: newPos.z },
+          });
+        } else if (gizmoMode === 'rotate') {
+          // Rotate each object's position around the centroid
+          const rotDelta = new THREE.Quaternion().setFromEuler(pivot.rotation);
+          const startRot = new THREE.Quaternion().setFromEuler(start.rot);
+          const deltaQuat = rotDelta.multiply(startRot.invert());
+
+          // Rotate position relative to centroid
+          const relPos = orig.pos.clone().sub(start.pos);
+          relPos.applyQuaternion(deltaQuat);
+          const newPos = relPos.add(pivot.position);
+
+          // Rotate the object itself
+          const objQuat = new THREE.Quaternion().setFromEuler(orig.rot);
+          objQuat.premultiply(deltaQuat);
+          const newRot = new THREE.Euler().setFromQuaternion(objQuat);
+
+          setObjectTransform(scene.id, obj.id, {
+            ...obj.transform,
+            position: { x: newPos.x, y: newPos.y, z: newPos.z },
+            rotation: { x: newRot.x, y: newRot.y, z: newRot.z, w: 1 },
+          });
+        } else if (gizmoMode === 'scale') {
+          // Scale positions relative to centroid and scale objects
+          const scaleFactor = new THREE.Vector3().copy(pivot.scale).divide(start.scl);
+          const relPos = orig.pos.clone().sub(start.pos);
+          relPos.multiply(scaleFactor);
+          const newPos = relPos.add(pivot.position);
+          const newScl = orig.scl.clone().multiply(scaleFactor);
+
+          setObjectTransform(scene.id, obj.id, {
+            ...obj.transform,
+            position: { x: newPos.x, y: newPos.y, z: newPos.z },
+            scale: { x: newScl.x, y: newScl.y, z: newScl.z },
+          });
+        }
+      }
+
+      // Reset pivot to new centroid after transform
+      pivotStart.current = null;
+    };
+
+    controls.addEventListener('mouseDown', onDragStart);
+    controls.addEventListener('mouseUp', onDragEnd);
+    return () => {
+      controls.removeEventListener('mouseDown', onDragStart);
+      controls.removeEventListener('mouseUp', onDragEnd);
+    };
+  }, [selectedObjects, gizmoMode, scene.id, setObjectTransform]);
+
+  if (!centroid || selectedObjects.length < 2 || !gizmoMode) return null;
+
+  return (
+    <>
+      <group ref={pivotRef} position={centroid}>
+        {/* Visual centroid marker */}
+        <mesh>
+          <sphereGeometry args={[0.08, 8, 8]} />
+          <meshBasicMaterial color="#f59e0b" transparent opacity={0.7} />
+        </mesh>
+      </group>
+      {pivotRef.current && (
+        <TransformControls
+          ref={transformRef}
+          object={pivotRef.current}
+          mode={gizmoMode}
+          size={0.75}
+        />
+      )}
+    </>
   );
 };
 
@@ -237,7 +401,9 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   const isSelected = selectedObjectIds.includes(obj.id);
 
   const gizmoMode = toolToMode(activeTool);
-  const showGizmo = isSelected && gizmoMode !== null && meshReady;
+  // Only show individual gizmo for single-selection; multi-select uses GroupTransformGizmo
+  const isMultiSelect = selectedObjectIds.length > 1;
+  const showGizmo = isSelected && !isMultiSelect && gizmoMode !== null && meshReady;
 
   const meshCallback = useCallback((node: THREE.Mesh | null) => {
     (meshRef as any).current = node;
@@ -283,17 +449,35 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   const dragPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
   const dragOffset = useRef(new THREE.Vector3());
 
+  // Right-click tracking: short click = context menu, hold+drag = orbit camera
+  const rightClickStart = useRef<{ x: number; y: number } | null>(null);
+
   const handlePointerDown = (e: any) => {
-    // Right-click opens context menu
+    // Right-click: record start position, do NOT stopPropagation (let OrbitControls handle drag)
     if (e.button === 2) {
-      e.stopPropagation();
       const nativeEvent = e.nativeEvent ?? e;
-      const clientX = nativeEvent.clientX ?? 0;
-      const clientY = nativeEvent.clientY ?? 0;
-      if (!selectedObjectIds.includes(obj.id)) {
-        selectObject(obj.id);
-      }
-      openContextMenu(clientX, clientY, obj.id);
+      rightClickStart.current = {
+        x: nativeEvent.clientX ?? 0,
+        y: nativeEvent.clientY ?? 0,
+      };
+
+      const onPointerUp = (ev: PointerEvent) => {
+        if (ev.button !== 2) return;
+        window.removeEventListener('pointerup', onPointerUp);
+        if (!rightClickStart.current) return;
+        const dx = ev.clientX - rightClickStart.current.x;
+        const dy = ev.clientY - rightClickStart.current.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        rightClickStart.current = null;
+        // Short click (< 5px movement) → open context menu
+        if (dist < 5) {
+          if (!selectedObjectIds.includes(obj.id)) {
+            selectObject(obj.id);
+          }
+          openContextMenu(ev.clientX, ev.clientY, obj.id);
+        }
+      };
+      window.addEventListener('pointerup', onPointerUp);
       return;
     }
 
