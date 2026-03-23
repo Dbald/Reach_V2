@@ -8,6 +8,7 @@ import { SceneObjects } from './SceneObjects';
 import { ZoneVisualizer } from './ZoneVisualizer';
 import { FirstPersonControls } from './FirstPersonControls';
 import type { Scene } from '@/types';
+import { getGroundMaterial } from '@/config/groundMaterials';
 
 export const SceneViewport: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -56,17 +57,7 @@ export const SceneViewport: React.FC = () => {
 
         {/* Ground plane */}
         {env.groundPlane && env.groundSize && (
-          <mesh
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[0, -0.025, 0]}
-            receiveShadow
-          >
-            <planeGeometry args={[env.groundSize.x, env.groundSize.z]} />
-            <meshStandardMaterial
-              color={env.groundColor ? `rgb(${Math.round(env.groundColor.r * 255)},${Math.round(env.groundColor.g * 255)},${Math.round(env.groundColor.b * 255)})` : '#8ca67a'}
-              wireframe={renderMode === 'wireframe'}
-            />
-          </mesh>
+          <GroundPlane env={env} renderMode={renderMode} />
         )}
 
         {/* Grid overlay */}
@@ -503,6 +494,32 @@ const GroundInteraction: React.FC = () => {
         <meshBasicMaterial visible={false} />
       </mesh>
     </>
+  );
+};
+
+/** Ground plane with material-based appearance */
+const GroundPlane: React.FC<{ env: Scene['environment']; renderMode: RenderMode }> = ({ env, renderMode }) => {
+  const gm = env.groundMaterial ? getGroundMaterial(env.groundMaterial) : null;
+  const baseColor = gm
+    ? gm.color
+    : env.groundColor
+      ? `rgb(${Math.round(env.groundColor.r * 255)},${Math.round(env.groundColor.g * 255)},${Math.round(env.groundColor.b * 255)})`
+      : '#8ca67a';
+
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, -0.025, 0]}
+      receiveShadow
+    >
+      <planeGeometry args={[env.groundSize!.x, env.groundSize!.z]} />
+      <meshStandardMaterial
+        color={baseColor}
+        roughness={gm?.roughness ?? 0.7}
+        metalness={gm?.metalness ?? 0}
+        wireframe={renderMode === 'wireframe'}
+      />
+    </mesh>
   );
 };
 

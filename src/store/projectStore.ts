@@ -15,7 +15,7 @@ import type {
 } from '@/types';
 import { createProject, defaultTransform } from '@/utils/defaults';
 
-export type PlacementType = 'object' | 'light' | 'camera' | 'text' | 'video' | 'audio' | 'sky' | 'zone' | null;
+export type PlacementType = 'object' | 'light' | 'camera' | 'text' | 'video' | 'audio' | 'sky' | 'zone' | 'catalog' | null;
 export type RenderMode = 'lit' | 'unlit' | 'wireframe';
 export type ZonePreset = 'walkable' | 'collision' | 'custom';
 
@@ -66,6 +66,9 @@ interface ProjectStore {
   // Project actions
   createNewProject: (name: string, template: TemplateType) => void;
   updateProjectName: (name: string) => void;
+
+  // Scene actions
+  duplicateScene: (sceneId: string, newName?: string) => string | null;
 
   // Scene object actions
   addObject: (sceneId: string, type: SceneObjectType, props?: Partial<SceneObject>) => string;
@@ -203,6 +206,56 @@ export const useProjectStore = create<ProjectStore>()(
           state.project.updatedAt = new Date().toISOString();
         }
       });
+    },
+
+    duplicateScene: (sceneId, newName) => {
+      let newId: string | null = null;
+      get()._pushUndo();
+      set((state) => {
+        const scene = state.project?.scenes[sceneId];
+        if (!scene || !state.project) return;
+        newId = uuid();
+        const clone = JSON.parse(JSON.stringify(scene));
+        clone.id = newId;
+        clone.name = newName || `${scene.name} (copy)`;
+        // Generate new IDs for all objects
+        const oldToNew: Record<string, string> = {};
+        const newObjects: Record<string, any> = {};
+        for (const [oldId, obj] of Object.entries(clone.objects)) {
+          const nid = uuid();
+          oldToNew[oldId] = nid;
+          (obj as any).id = nid;
+          newObjects[nid] = obj;
+        }
+        clone.objects = newObjects;
+        // Remap parentIds
+        for (const obj of Object.values(clone.objects) as any[]) {
+          if (obj.parentId && oldToNew[obj.parentId]) {
+            obj.parentId = oldToNew[obj.parentId];
+          }
+        }
+        // New IDs for zones
+        const newZones: Record<string, any> = {};
+        for (const zone of Object.values(clone.zones) as any[]) {
+          const nid = uuid();
+          zone.id = nid;
+          newZones[nid] = zone;
+        }
+        clone.zones = newZones;
+        // New IDs for viewpoints
+        const newVps: Record<string, any> = {};
+        for (const vp of Object.values(clone.viewpoints) as any[]) {
+          const nid = uuid();
+          vp.id = nid;
+          newVps[nid] = vp;
+        }
+        clone.viewpoints = newVps;
+        state.project.scenes[newId!] = clone;
+        state.editor.activeSceneId = newId;
+        state.editor.selectedObjectId = null;
+        state.project.updatedAt = new Date().toISOString();
+      });
+      return newId;
     },
 
     addObject: (sceneId, type, props) => {

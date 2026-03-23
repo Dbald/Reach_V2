@@ -139,6 +139,8 @@ export interface InteractionBlock {
 
 // --- Environment ---
 
+export type GroundMaterial = 'grass' | 'stone' | 'concrete' | 'gravel' | 'wood-deck' | 'pavers' | 'mulch' | 'sand' | 'dirt' | 'custom';
+
 export interface EnvironmentConfig {
   skybox?: string;
   ambientLightColor: Color;
@@ -150,6 +152,7 @@ export interface EnvironmentConfig {
   groundPlane: boolean;
   groundColor?: Color;
   groundSize?: Vector3;
+  groundMaterial?: GroundMaterial;
 }
 
 // --- Scene ---

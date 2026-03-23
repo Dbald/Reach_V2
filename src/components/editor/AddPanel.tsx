@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { useProjectStore } from '@/store';
 import type { PlacementType, ZonePreset } from '@/store/projectStore';
-import type { EnvironmentConfig } from '@/types';
+import type { EnvironmentConfig, GroundMaterial } from '@/types';
+import { GROUND_MATERIALS } from '@/config/groundMaterials';
+import { CATALOG_CATEGORIES, getCatalogByCategory } from '@/config/assetCatalog';
+import type { AssetCategory, CatalogItem } from '@/config/assetCatalog';
+import { searchSketchfab, SKETCHFAB_SUGGESTIONS } from '@/services/sketchfab';
+import type { SketchfabModel } from '@/services/sketchfab';
 
 const categories: { id: PlacementType; label: string; desc: string; icon: string }[] = [
+  { id: 'catalog', label: 'Library', desc: 'Browse asset catalog',     icon: '\u{1F4E6}' },
   { id: 'sky',    label: 'Sky',     desc: 'Skybox & environment',     icon: '\u2600' },
   { id: 'object', label: 'Object',  desc: 'Box, sphere, plane mesh',  icon: '\u25A2' },
   { id: 'video',  label: 'Video',   desc: 'Video screen in scene',    icon: '\u25B6' },
@@ -33,11 +39,12 @@ export const AddPanel: React.FC = () => {
 
   if (activeTool !== 'place') return null;
 
-  // Once a type is selected, dock to the left as a compact sidebar
+  // Once a type is selected, dock to the right as a compact sidebar
   const isDocked = !!placementType;
+  const isWide = placementType === ('catalog' as any) || placementType === 'sky';
 
   return (
-    <div style={isDocked ? styles.panelDocked : styles.panel}>
+    <div style={isDocked ? { ...styles.panelDocked, ...(isWide ? { width: 300 } : {}) } : styles.panel}>
       <div style={styles.header}>
         <span style={styles.title}>{isDocked ? '' : 'Add to Scene'}</span>
         <button style={styles.closeBtn} onClick={() => setActiveTool('select')}>&times;</button>
@@ -47,6 +54,8 @@ export const AddPanel: React.FC = () => {
         <SkySettings onBack={() => setPlacementType(null)} />
       ) : placementType === 'zone' ? (
         <ZoneSettings onBack={() => setPlacementType(null)} />
+      ) : placementType === 'catalog' as any ? (
+        <AssetCatalogPanel onBack={() => setPlacementType(null)} />
       ) : placementType ? (
         <PlacementSettings type={placementType} onBack={() => setPlacementType(null)} />
       ) : (
@@ -526,9 +535,314 @@ const SkySettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         />
         <span>Show ground plane</span>
       </label>
+
+      {env?.groundPlane && (
+        <>
+          <div style={{ ...styles.sectionTitle, marginTop: 8 }}>Ground Material</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+            {GROUND_MATERIALS.filter((m) => m.id !== 'custom').map((mat) => (
+              <button
+                key={mat.id}
+                onClick={() => updateEnv({ groundMaterial: mat.id as GroundMaterial })}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 8px',
+                  borderRadius: 6,
+                  border: `1px solid ${(env?.groundMaterial ?? 'grass') === mat.id ? '#3b82f6' : '#334155'}`,
+                  background: (env?.groundMaterial ?? 'grass') === mat.id ? '#1e293b' : '#0a0a1a',
+                  color: (env?.groundMaterial ?? 'grass') === mat.id ? '#fff' : '#94a3b8',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                }}
+              >
+                <span style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 3,
+                  background: mat.color,
+                  flexShrink: 0,
+                }} />
+                <span>{mat.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };
+
+/* ---------- Asset Catalog Panel ---------- */
+
+const AssetCatalogPanel: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
+  const addObject = useProjectStore((s) => s.addObject);
+  const selectObject = useProjectStore((s) => s.selectObject);
+
+  const [activeCategory, setActiveCategory] = useState<AssetCategory | null>(null);
+  const [tab, setTab] = useState<'catalog' | 'sketchfab'>('catalog');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sfResults, setSfResults] = useState<SketchfabModel[]>([]);
+  const [sfLoading, setSfLoading] = useState(false);
+  const [sfSearched, setSfSearched] = useState(false);
+
+  const handlePlaceItem = (item: CatalogItem) => {
+    if (!activeSceneId || !item.primitive) return;
+    const p = item.primitive;
+    const id = addObject(activeSceneId, 'mesh', {
+      name: item.name,
+      transform: {
+        position: { x: 0, y: p.yOffset, z: 0 },
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+        scale: { x: p.scale[0], y: p.scale[1], z: p.scale[2] },
+      },
+      material: {
+        color: hexToColor(p.color),
+        roughness: 0.7,
+        metalness: 0,
+      },
+      tags: item.tags,
+      metadata: { shape: p.shape, catalogId: item.id },
+    });
+    selectObject(id);
+  };
+
+  const handleSketchfabSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSfLoading(true);
+    setSfSearched(true);
+    const result = await searchSketchfab(searchQuery);
+    setSfResults(result.models);
+    setSfLoading(false);
+  };
+
+  const items = activeCategory ? getCatalogByCategory(activeCategory) : [];
+
+  return (
+    <div style={styles.settingsPanel}>
+      <button style={styles.backBtn} onClick={activeCategory ? () => setActiveCategory(null) : onBack}>
+        &larr; {activeCategory ? 'Categories' : 'Back'}
+      </button>
+
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: 2, marginBottom: 10, background: '#0a0a1a', borderRadius: 6, padding: 2 }}>
+        <button
+          onClick={() => setTab('catalog')}
+          style={{
+            flex: 1, padding: '6px', borderRadius: 4, border: 'none',
+            background: tab === 'catalog' ? '#1e293b' : 'transparent',
+            color: tab === 'catalog' ? '#fff' : '#64748b',
+            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Built-in
+        </button>
+        <button
+          onClick={() => setTab('sketchfab')}
+          style={{
+            flex: 1, padding: '6px', borderRadius: 4, border: 'none',
+            background: tab === 'sketchfab' ? '#1e293b' : 'transparent',
+            color: tab === 'sketchfab' ? '#fff' : '#64748b',
+            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Sketchfab
+        </button>
+      </div>
+
+      {tab === 'catalog' && !activeCategory && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Asset Library</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {CATALOG_CATEGORIES.map((cat) => {
+              const count = getCatalogByCategory(cat.id).length;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 10px', borderRadius: 6,
+                    border: '1px solid #334155', background: '#0a0a1a',
+                    color: '#e2e8f0', cursor: 'pointer', textAlign: 'left' as const,
+                  }}
+                >
+                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{cat.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12 }}>{cat.label}</div>
+                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{cat.desc}</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: '#64748b' }}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {tab === 'catalog' && activeCategory && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+            {CATALOG_CATEGORIES.find((c) => c.id === activeCategory)?.label}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {items.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 8px', borderRadius: 6,
+                  border: '1px solid #334155', background: '#0a0a1a',
+                }}
+              >
+                {item.primitive && (
+                  <span style={{
+                    width: 28, height: 28, borderRadius: 4,
+                    background: item.primitive.color,
+                    flexShrink: 0,
+                  }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: '#e2e8f0' }}>{item.name}</div>
+                  <div style={{ fontSize: 9, color: '#64748b' }}>
+                    {item.tags.slice(0, 2).join(' \u00B7 ')}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handlePlaceItem(item)}
+                  style={{
+                    padding: '4px 8px', borderRadius: 4, border: 'none',
+                    background: '#3b82f6', color: '#fff', fontSize: 10,
+                    fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: '#475569', marginTop: 8, textAlign: 'center' }}>
+            Click Add to place at origin, then position in the scene
+          </div>
+        </>
+      )}
+
+      {tab === 'sketchfab' && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Sketchfab Search</div>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSketchfabSearch(); }}
+              placeholder="Search 3D models..."
+              style={{ ...styles.input, flex: 1 }}
+            />
+            <button
+              onClick={handleSketchfabSearch}
+              disabled={sfLoading}
+              style={{
+                padding: '6px 10px', borderRadius: 6, border: 'none',
+                background: '#3b82f6', color: '#fff', fontSize: 11,
+                fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                opacity: sfLoading ? 0.5 : 1,
+              }}
+            >
+              {sfLoading ? '...' : 'Search'}
+            </button>
+          </div>
+
+          {/* Quick suggestions */}
+          {!sfSearched && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>Suggestions</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {SKETCHFAB_SUGGESTIONS.slice(0, 8).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => { setSearchQuery(s); }}
+                    style={{
+                      padding: '3px 8px', borderRadius: 4,
+                      border: '1px solid #334155', background: '#0a0a1a',
+                      color: '#94a3b8', fontSize: 10, cursor: 'pointer',
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {sfSearched && sfResults.length === 0 && !sfLoading && (
+            <div style={{ color: '#475569', fontSize: 11, fontStyle: 'italic', textAlign: 'center', padding: 16 }}>
+              No results found. Try a different search term.
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 300, overflowY: 'auto' }}>
+            {sfResults.map((model) => (
+              <div
+                key={model.uid}
+                style={{
+                  display: 'flex', gap: 8, padding: '6px 8px',
+                  borderRadius: 6, border: '1px solid #334155', background: '#0a0a1a',
+                  alignItems: 'center',
+                }}
+              >
+                {model.thumbnailUrl && (
+                  <img
+                    src={model.thumbnailUrl}
+                    alt={model.name}
+                    style={{ width: 40, height: 40, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {model.name}
+                  </div>
+                  <div style={{ fontSize: 9, color: '#64748b' }}>
+                    {model.authorName} &middot; {(model.faceCount / 1000).toFixed(0)}k faces
+                  </div>
+                </div>
+                <a
+                  href={model.viewerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    padding: '4px 8px', borderRadius: 4,
+                    border: '1px solid #334155', background: '#1e293b',
+                    color: '#3b82f6', fontSize: 10, fontWeight: 600,
+                    textDecoration: 'none', flexShrink: 0,
+                  }}
+                >
+                  View
+                </a>
+              </div>
+            ))}
+          </div>
+
+          {sfResults.length > 0 && (
+            <div style={{ fontSize: 10, color: '#475569', marginTop: 8, textAlign: 'center', lineHeight: 1.4 }}>
+              Download models from Sketchfab, then import GLB files via the Asset tray below
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+/** Convert hex color to RGBA color object */
+function hexToColor(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return { r, g, b, a: 1 };
+}
 
 /* ---------- Styles ---------- */
 
