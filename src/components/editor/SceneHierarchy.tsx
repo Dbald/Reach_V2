@@ -5,10 +5,12 @@ import { getHierarchy } from '@/services/sceneGraph';
 export const SceneHierarchy: React.FC = () => {
   const project = useProjectStore((s) => s.project);
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
-  const selectedObjectId = useProjectStore((s) => s.editor.selectedObjectId);
+  const selectedObjectIds = useProjectStore((s) => s.editor.selectedObjectIds);
   const selectObject = useProjectStore((s) => s.selectObject);
   const deleteObject = useProjectStore((s) => s.deleteObject);
   const duplicateObject = useProjectStore((s) => s.duplicateObject);
+  const deleteSelected = useProjectStore((s) => s.deleteSelected);
+  const duplicateSelected = useProjectStore((s) => s.duplicateSelected);
   const duplicateScene = useProjectStore((s) => s.duplicateScene);
   const setActiveScene = useProjectStore((s) => s.setActiveScene);
   const showHierarchy = useProjectStore((s) => s.editor.showHierarchy);
@@ -46,9 +48,11 @@ export const SceneHierarchy: React.FC = () => {
     setRenamingScene(null);
   };
 
+  const multiSelected = selectedObjectIds.length > 1;
+
   return (
     <div style={styles.panel}>
-      {/* Scene selector - shown when multiple scenes exist */}
+      {/* Scene selector */}
       <div style={styles.header}>
         <span style={styles.headerTitle}>Scene</span>
         {allScenes.length > 1 && (
@@ -100,45 +104,68 @@ export const SceneHierarchy: React.FC = () => {
         </button>
       </div>
 
+      {/* Multi-select actions bar */}
+      {multiSelected && (
+        <div style={styles.multiBar}>
+          <span style={styles.multiCount}>{selectedObjectIds.length} selected</span>
+          <button
+            onClick={() => duplicateSelected(activeSceneId)}
+            style={styles.multiBtn}
+          >
+            Dup All
+          </button>
+          <button
+            onClick={() => deleteSelected(activeSceneId)}
+            style={{ ...styles.multiBtn, color: '#ef4444' }}
+          >
+            Del All
+          </button>
+        </div>
+      )}
+
       <div style={styles.section}>
         <div style={styles.sectionTitle}>Objects ({hierarchy.length})</div>
+        <div style={styles.selectHint}>Shift+click to multi-select</div>
         {hierarchy.length === 0 && (
           <div style={styles.empty}>No objects yet. Use Place tool to add objects.</div>
         )}
-        {hierarchy.map(({ object: obj, depth }) => (
-          <button
-            key={obj.id}
-            onClick={() => selectObject(obj.id)}
-            style={{
-              ...styles.item,
-              paddingLeft: 12 + depth * 16,
-              ...(selectedObjectId === obj.id ? styles.itemSelected : {}),
-            }}
-          >
-            <span style={styles.itemType}>{obj.type.slice(0, 3)}</span>
-            <span style={styles.itemName}>{obj.name}</span>
-            {!obj.visible && <span style={styles.hidden}>hidden</span>}
-            {obj.locked && <span style={styles.locked}>locked</span>}
-            {selectedObjectId === obj.id && (
-              <span style={styles.actions}>
-                <button
-                  onClick={(e) => { e.stopPropagation(); duplicateObject(activeSceneId, obj.id); }}
-                  style={styles.actionBtn}
-                  title="Duplicate"
-                >
-                  dup
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteObject(activeSceneId, obj.id); }}
-                  style={styles.actionBtn}
-                  title="Delete"
-                >
-                  del
-                </button>
-              </span>
-            )}
-          </button>
-        ))}
+        {hierarchy.map(({ object: obj, depth }) => {
+          const isSelected = selectedObjectIds.includes(obj.id);
+          return (
+            <button
+              key={obj.id}
+              onClick={(e) => selectObject(obj.id, e.shiftKey)}
+              style={{
+                ...styles.item,
+                paddingLeft: 12 + depth * 16,
+                ...(isSelected ? styles.itemSelected : {}),
+              }}
+            >
+              <span style={styles.itemType}>{obj.type.slice(0, 3)}</span>
+              <span style={styles.itemName}>{obj.name}</span>
+              {!obj.visible && <span style={styles.hidden}>hidden</span>}
+              {obj.locked && <span style={styles.locked}>locked</span>}
+              {isSelected && !multiSelected && (
+                <span style={styles.actions}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); duplicateObject(activeSceneId, obj.id); }}
+                    style={styles.actionBtn}
+                    title="Duplicate"
+                  >
+                    dup
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteObject(activeSceneId, obj.id); }}
+                    style={styles.actionBtn}
+                    title="Delete"
+                  >
+                    del
+                  </button>
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div style={styles.section}>
@@ -233,6 +260,25 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   },
+  multiBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 12px',
+    background: '#1e293b',
+    borderBottom: '1px solid #334155',
+  },
+  multiCount: { fontSize: 10, color: '#3b82f6', fontWeight: 600, flex: 1 },
+  multiBtn: {
+    padding: '2px 8px',
+    borderRadius: 3,
+    border: 'none',
+    background: '#334155',
+    color: '#94a3b8',
+    fontSize: 10,
+    cursor: 'pointer',
+    fontWeight: 600,
+  },
   section: { padding: '8px 0' },
   sectionTitle: {
     fontSize: 10,
@@ -242,6 +288,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.8,
     padding: '4px 12px',
   },
+  selectHint: { fontSize: 9, color: '#475569', padding: '0 12px 4px', fontStyle: 'italic' },
   empty: { padding: '8px 12px', color: '#475569', fontSize: 11, fontStyle: 'italic' },
   item: {
     display: 'flex',

@@ -5,8 +5,10 @@ import type { SceneObject, Vector3, Quaternion } from '@/types';
 export const PropertyInspector: React.FC = () => {
   const project = useProjectStore((s) => s.project);
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
-  const selectedObjectId = useProjectStore((s) => s.editor.selectedObjectId);
+  const selectedObjectIds = useProjectStore((s) => s.editor.selectedObjectIds);
   const showInspector = useProjectStore((s) => s.editor.showInspector);
+
+  const selectedObjectId = selectedObjectIds[0] ?? null;
 
   // Track visibility for smooth transition
   const [visible, setVisible] = useState(false);
@@ -15,7 +17,6 @@ export const PropertyInspector: React.FC = () => {
 
   useEffect(() => {
     if (hasObject) {
-      // Small delay so the DOM renders at width 0 first, then animates open
       const t = requestAnimationFrame(() => setVisible(true));
       return () => cancelAnimationFrame(t);
     } else {
@@ -49,6 +50,13 @@ export const PropertyInspector: React.FC = () => {
       overflow: 'hidden',
       transition: 'width 0.2s ease, opacity 0.2s ease',
     }}>
+      {selectedObjectIds.length > 1 && (
+        <div style={{ padding: '8px 12px', borderBottom: '1px solid #1e293b', background: '#1e293b' }}>
+          <span style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600 }}>
+            {selectedObjectIds.length} objects selected
+          </span>
+        </div>
+      )}
       {obj && (
         <PropertyContent obj={obj} sceneId={activeSceneId!} />
       )}

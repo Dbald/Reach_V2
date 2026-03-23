@@ -230,10 +230,11 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   const transformRef = useRef<any>(null);
   const selectObject = useProjectStore((s) => s.selectObject);
   const setObjectTransform = useProjectStore((s) => s.setObjectTransform);
-  const selectedObjectId = useProjectStore((s) => s.editor.selectedObjectId);
+  const selectedObjectIds = useProjectStore((s) => s.editor.selectedObjectIds);
+  const openContextMenu = useProjectStore((s) => s.openContextMenu);
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const project = useProjectStore((s) => s.project);
-  const isSelected = selectedObjectId === obj.id;
+  const isSelected = selectedObjectIds.includes(obj.id);
 
   const gizmoMode = toolToMode(activeTool);
   const showGizmo = isSelected && gizmoMode !== null && meshReady;
@@ -354,8 +355,9 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     };
 
     const onCancel = (ev: MouseEvent) => {
+      if (!isDragging.current) return;
       ev.preventDefault();
-      if (isDragging.current && dragStartPos.current) {
+      if (dragStartPos.current) {
         // Revert to original position
         const current = useProjectStore.getState().project?.scenes[sceneId]?.objects[obj.id];
         if (current) {
@@ -375,7 +377,20 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
   const handleClick = (e: any) => {
     e.stopPropagation();
-    selectObject(obj.id);
+    const shiftKey = e.nativeEvent?.shiftKey ?? e.shiftKey ?? false;
+    selectObject(obj.id, shiftKey);
+  };
+
+  const handleContextMenu = (e: any) => {
+    e.stopPropagation();
+    // Get screen coordinates for the context menu
+    const nativeEvent = e.nativeEvent ?? e;
+    const clientX = nativeEvent.clientX ?? 0;
+    const clientY = nativeEvent.clientY ?? 0;
+    if (!selectedObjectIds.includes(obj.id)) {
+      selectObject(obj.id);
+    }
+    openContextMenu(clientX, clientY, obj.id);
   };
 
   const getColor = (): string => {
@@ -438,7 +453,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
         )}
 
         {/* Visual indicator sphere */}
-        <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
+        <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown} onContextMenu={handleContextMenu}>
           <sphereGeometry args={[0.2, 16, 16]} />
           <meshBasicMaterial color={lightColor} wireframe={isWireframe} />
         </mesh>
@@ -509,7 +524,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
       <>
         <group position={pos} rotation={rotation}>
           {/* Camera body */}
-          <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
+          <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown} onContextMenu={handleContextMenu}>
             <coneGeometry args={[0.2, 0.4, 4]} />
             <meshStandardMaterial color={camColor} roughness={0.5} wireframe={isWireframe} />
           </mesh>
@@ -605,7 +620,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     return (
       <>
         <group position={pos}>
-          <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick} onPointerDown={handlePointerDown}>
+          <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick} onPointerDown={handlePointerDown} onContextMenu={handleContextMenu}>
             <sphereGeometry args={[1, 16, 16]} />
             <meshStandardMaterial color="#f97316" roughness={0.4} wireframe={isWireframe} />
           </mesh>
@@ -633,7 +648,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     if (asset && is3D && asset.url) {
       return (
         <>
-          <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation}>
+          <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation} onContextMenu={handleContextMenu}>
             <Suspense fallback={<GltfFallback />}>
               <GltfModel url={asset.url} onClick={handleClick} onPointerDown={handlePointerDown} />
             </Suspense>

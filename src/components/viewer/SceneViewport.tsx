@@ -7,6 +7,7 @@ import type { RenderMode } from '@/store/projectStore';
 import { SceneObjects } from './SceneObjects';
 import { ZoneVisualizer } from './ZoneVisualizer';
 import { FirstPersonControls } from './FirstPersonControls';
+import { ContextMenu } from '@/components/editor/ContextMenu';
 import type { Scene } from '@/types';
 import { getGroundMaterial } from '@/config/groundMaterials';
 
@@ -25,7 +26,7 @@ export const SceneViewport: React.FC = () => {
   const env = scene.environment;
 
   return (
-    <div style={{ flex: 1, position: 'relative', background: '#1a1a2e' }}>
+    <div style={{ flex: 1, position: 'relative', background: '#1a1a2e' }} onContextMenu={(e) => e.preventDefault()}>
       <Canvas
         camera={{ position: [0, 5, 10], fov: 60, near: 0.1, far: 1000 }}
         shadows
@@ -126,6 +127,9 @@ export const SceneViewport: React.FC = () => {
           Click to look around &middot; WASD to move &middot; Esc to release
         </div>
       )}
+
+      {/* Right-click context menu */}
+      <ContextMenu />
     </div>
   );
 };
@@ -219,7 +223,7 @@ const CameraFocus: React.FC<{ scene: Scene }> = ({ scene }) => {
 const CanvasToolbar: React.FC = () => {
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const setActiveTool = useProjectStore((s) => s.setActiveTool);
-  const selectedObjectId = useProjectStore((s) => s.editor.selectedObjectId);
+  const selectedObjectIds = useProjectStore((s) => s.editor.selectedObjectIds);
 
   const tools = [
     { id: 'move' as const, label: 'Move', icon: '\u2725', shortcut: 'G' },
@@ -237,7 +241,7 @@ const CanvasToolbar: React.FC = () => {
           style={{
             ...styles.canvasToolBtn,
             ...(activeTool === t.id ? styles.canvasToolBtnActive : {}),
-            ...(!selectedObjectId && activeTool !== t.id ? { opacity: 0.35 } : {}),
+            ...(selectedObjectIds.length === 0 && activeTool !== t.id ? { opacity: 0.35 } : {}),
           }}
         >
           <span style={styles.canvasToolIcon}>{t.icon}</span>
@@ -390,6 +394,7 @@ const ZoneDrawPreview: React.FC = () => {
 /** Click on empty space: deselect, place object, or draw zone */
 const GroundInteraction: React.FC = () => {
   const selectObject = useProjectStore((s) => s.selectObject);
+  const closeContextMenu = useProjectStore((s) => s.closeContextMenu);
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const placementType = useProjectStore((s) => s.editor.placementType);
   const placementSettings = useProjectStore((s) => s.editor.placementSettings);
@@ -488,6 +493,7 @@ const GroundInteraction: React.FC = () => {
           }
 
           selectObject(null);
+          closeContextMenu();
         }}
       >
         <planeGeometry args={[500, 500]} />

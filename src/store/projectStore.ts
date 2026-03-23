@@ -31,9 +31,17 @@ export interface ZoneDrawState {
   hasCollision: boolean;
 }
 
+interface ContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  objectId: string | null;
+}
+
 interface EditorState {
-  selectedObjectId: string | null;
+  selectedObjectIds: string[];
   activeSceneId: string | null;
+  contextMenu: ContextMenuState;
   activeTool: 'select' | 'move' | 'rotate' | 'scale' | 'place' | 'zone';
   placementType: PlacementType;
   placementSettings: Record<string, unknown>;
@@ -90,8 +98,14 @@ interface ProjectStore {
   removeAsset: (assetId: string) => void;
 
   // Editor actions
-  selectObject: (objectId: string | null) => void;
+  selectObject: (objectId: string | null, addToSelection?: boolean) => void;
+  deleteSelected: (sceneId: string) => void;
+  duplicateSelected: (sceneId: string) => void;
   setActiveScene: (sceneId: string) => void;
+
+  // Context menu
+  openContextMenu: (x: number, y: number, objectId: string) => void;
+  closeContextMenu: () => void;
   setActiveTool: (tool: EditorState['activeTool']) => void;
   setPlacementType: (type: PlacementType) => void;
   setPlacementSettings: (settings: Record<string, unknown>) => void;
@@ -115,8 +129,9 @@ interface ProjectStore {
 }
 
 const defaultEditorState: EditorState = {
-  selectedObjectId: null,
+  selectedObjectIds: [],
   activeSceneId: null,
+  contextMenu: { visible: false, x: 0, y: 0, objectId: null },
   activeTool: 'select',
   placementType: null,
   placementSettings: {},
@@ -191,7 +206,7 @@ export const useProjectStore = create<ProjectStore>()(
         state.project = project;
         const firstSceneId = Object.keys(project.scenes)[0];
         state.editor.activeSceneId = firstSceneId;
-        state.editor.selectedObjectId = null;
+        state.editor.selectedObjectIds = [];
         state.validationReport = null;
         state._undoStack = [];
         state._redoStack = [];
@@ -252,7 +267,7 @@ export const useProjectStore = create<ProjectStore>()(
         clone.viewpoints = newVps;
         state.project.scenes[newId!] = clone;
         state.editor.activeSceneId = newId;
-        state.editor.selectedObjectId = null;
+        state.editor.selectedObjectIds = [];
         state.project.updatedAt = new Date().toISOString();
       });
       return newId;
@@ -304,9 +319,8 @@ export const useProjectStore = create<ProjectStore>()(
             delete scene.objects[id];
           }
         }
-        if (state.editor.selectedObjectId === objectId) {
-          state.editor.selectedObjectId = null;
-        }
+        const idx = state.editor.selectedObjectIds.indexOf(objectId);
+        if (idx >= 0) state.editor.selectedObjectIds.splice(idx, 1);
         state.project!.updatedAt = new Date().toISOString();
       });
     },
@@ -341,7 +355,16 @@ export const useProjectStore = create<ProjectStore>()(
       get()._pushUndo();
       set((state) => {
         const obj = state.project?.scenes[sceneId]?.objects[objectId];
-        if (obj) obj.transform = transform;
+        if (!obj) return;
+        // Clamp Y to ground level (objects can't go below y=0)
+        const clamped = {
+          ...transform,
+          position: {
+            ...transform.position,
+            y: Math.max(0, transform.position.y),
+          },
+        };
+        obj.transform = clamped;
       });
     },
 
@@ -417,21 +440,81 @@ export const useProjectStore = create<ProjectStore>()(
       });
     },
 
-    selectObject: (objectId) => {
+    selectObject: (objectId, addToSelection = false) => {
       set((state) => {
-        state.editor.selectedObjectId = objectId;
+        if (objectId === null) {
+          state.editor.selectedObjectIds = [];
+        } else if (addToSelection) {
+          const idx = state.editor.selectedObjectIds.indexOf(objectId);
+          if (idx >= 0) {
+            state.editor.selectedObjectIds.splice(idx, 1);
+          } else {
+            state.editor.selectedObjectIds.push(objectId);
+          }
+        } else {
+          state.editor.selectedObjectIds = [objectId];
+        }
         // Close add panel when selecting an object
         if (objectId && state.editor.activeTool === 'place') {
           state.editor.activeTool = 'select';
           state.editor.placementType = null;
         }
+        state.editor.contextMenu.visible = false;
+      });
+    },
+
+    deleteSelected: (sceneId) => {
+      const ids = get().editor.selectedObjectIds;
+      if (ids.length === 0) return;
+      get()._pushUndo();
+      set((state) => {
+        const scene = state.project?.scenes[sceneId];
+        if (!scene) return;
+        for (const id of ids) {
+          delete scene.objects[id];
+          // Delete children
+          for (const [childId, child] of Object.entries(scene.objects)) {
+            if (child.parentId === id) delete scene.objects[childId];
+          }
+        }
+        state.editor.selectedObjectIds = [];
+        state.project!.updatedAt = new Date().toISOString();
+      });
+    },
+
+    duplicateSelected: (sceneId) => {
+      const ids = get().editor.selectedObjectIds;
+      if (ids.length === 0) return;
+      get()._pushUndo();
+      const newIds: string[] = [];
+      set((state) => {
+        const scene = state.project?.scenes[sceneId];
+        if (!scene) return;
+        for (const id of ids) {
+          const original = scene.objects[id];
+          if (!original) continue;
+          const newId = uuid();
+          newIds.push(newId);
+          const clone: SceneObject = {
+            ...JSON.parse(JSON.stringify(original)),
+            id: newId,
+            name: `${original.name} (copy)`,
+            transform: {
+              ...original.transform,
+              position: { ...original.transform.position, x: original.transform.position.x + 1 },
+            },
+          };
+          scene.objects[newId] = clone;
+        }
+        state.editor.selectedObjectIds = newIds;
+        state.project!.updatedAt = new Date().toISOString();
       });
     },
 
     setActiveScene: (sceneId) => {
       set((state) => {
         state.editor.activeSceneId = sceneId;
-        state.editor.selectedObjectId = null;
+        state.editor.selectedObjectIds = [];
       });
     },
 
@@ -470,16 +553,16 @@ export const useProjectStore = create<ProjectStore>()(
     focusOnSelected: () => {
       const { editor } = get();
       if (editor.isFocused) {
-        // Toggle: unfocus back to original view
         set((state) => {
           state.editor.isFocused = false;
           state.editor.focusTargetId = '__unfocus__';
         });
         return;
       }
-      if (editor.selectedObjectId) {
+      const firstSelected = editor.selectedObjectIds[0];
+      if (firstSelected) {
         set((state) => {
-          state.editor.focusTargetId = editor.selectedObjectId;
+          state.editor.focusTargetId = firstSelected;
           state.editor.isFocused = true;
         });
       }
@@ -507,6 +590,19 @@ export const useProjectStore = create<ProjectStore>()(
     togglePanel: (panel) => {
       set((state) => {
         state.editor[panel] = !state.editor[panel];
+      });
+    },
+
+    // --- Context menu ---
+    openContextMenu: (x, y, objectId) => {
+      set((state) => {
+        state.editor.contextMenu = { visible: true, x, y, objectId };
+      });
+    },
+
+    closeContextMenu: () => {
+      set((state) => {
+        state.editor.contextMenu.visible = false;
       });
     },
 
