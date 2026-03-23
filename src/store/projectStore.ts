@@ -84,6 +84,8 @@ interface ProjectStore {
   deleteObject: (sceneId: string, objectId: string) => void;
   duplicateObject: (sceneId: string, objectId: string) => string | null;
   setObjectTransform: (sceneId: string, objectId: string, transform: Transform) => void;
+  /** Like setObjectTransform but skips undo push — use for live dragging */
+  setObjectTransformLive: (sceneId: string, objectId: string, transform: Transform) => void;
   setObjectMaterial: (sceneId: string, objectId: string, material: MaterialConfig) => void;
   setActiveCamera: (sceneId: string, cameraObjectId: string) => void;
 
@@ -357,6 +359,21 @@ export const useProjectStore = create<ProjectStore>()(
         const obj = state.project?.scenes[sceneId]?.objects[objectId];
         if (!obj) return;
         // Clamp Y to ground level (objects can't go below y=0)
+        const clamped = {
+          ...transform,
+          position: {
+            ...transform.position,
+            y: Math.max(0, transform.position.y),
+          },
+        };
+        obj.transform = clamped;
+      });
+    },
+
+    setObjectTransformLive: (sceneId, objectId, transform) => {
+      set((state) => {
+        const obj = state.project?.scenes[sceneId]?.objects[objectId];
+        if (!obj) return;
         const clamped = {
           ...transform,
           position: {

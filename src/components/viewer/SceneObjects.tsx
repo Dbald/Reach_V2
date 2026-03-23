@@ -34,8 +34,10 @@ const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
   const selectedObjectIds = useProjectStore((s) => s.editor.selectedObjectIds);
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const setObjectTransform = useProjectStore((s) => s.setObjectTransform);
+  const setObjectTransformLive = useProjectStore((s) => s.setObjectTransformLive);
   const pivotRef = useRef<THREE.Group>(null);
   const transformRef = useRef<any>(null);
+  const isDragging = useRef(false);
 
   const gizmoMode = (() => {
     switch (activeTool) {
@@ -79,6 +81,60 @@ const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
     }
   }, [centroid]);
 
+  // Apply current pivot transform to all selected objects
+  const applyGroupTransform = useCallback((setter: typeof setObjectTransform | typeof setObjectTransformLive) => {
+    if (!pivotRef.current || !pivotStart.current) return;
+    const pivot = pivotRef.current;
+    const start = pivotStart.current;
+    const currentObjects = selectedObjectIds
+      .map((id) => scene.objects[id])
+      .filter(Boolean);
+
+    for (const obj of currentObjects) {
+      const orig = originals.current.get(obj.id);
+      if (!orig) continue;
+
+      if (gizmoMode === 'translate') {
+        const delta = new THREE.Vector3().subVectors(pivot.position, start.pos);
+        const newPos = orig.pos.clone().add(delta);
+        setter(scene.id, obj.id, {
+          ...obj.transform,
+          position: { x: newPos.x, y: newPos.y, z: newPos.z },
+        });
+      } else if (gizmoMode === 'rotate') {
+        const rotDelta = new THREE.Quaternion().setFromEuler(pivot.rotation);
+        const startRot = new THREE.Quaternion().setFromEuler(start.rot);
+        const deltaQuat = rotDelta.multiply(startRot.invert());
+
+        const relPos = orig.pos.clone().sub(start.pos);
+        relPos.applyQuaternion(deltaQuat);
+        const newPos = relPos.add(pivot.position);
+
+        const objQuat = new THREE.Quaternion().setFromEuler(orig.rot);
+        objQuat.premultiply(deltaQuat);
+        const newRot = new THREE.Euler().setFromQuaternion(objQuat);
+
+        setter(scene.id, obj.id, {
+          ...obj.transform,
+          position: { x: newPos.x, y: newPos.y, z: newPos.z },
+          rotation: { x: newRot.x, y: newRot.y, z: newRot.z, w: 1 },
+        });
+      } else if (gizmoMode === 'scale') {
+        const scaleFactor = new THREE.Vector3().copy(pivot.scale).divide(start.scl);
+        const relPos = orig.pos.clone().sub(start.pos);
+        relPos.multiply(scaleFactor);
+        const newPos = relPos.add(pivot.position);
+        const newScl = orig.scl.clone().multiply(scaleFactor);
+
+        setter(scene.id, obj.id, {
+          ...obj.transform,
+          position: { x: newPos.x, y: newPos.y, z: newPos.z },
+          scale: { x: newScl.x, y: newScl.y, z: newScl.z },
+        });
+      }
+    }
+  }, [selectedObjectIds, scene, gizmoMode, setObjectTransform, setObjectTransformLive]);
+
   // Listen for TransformControls drag events
   useEffect(() => {
     const controls = transformRef.current;
@@ -86,10 +142,16 @@ const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
 
     const onDragStart = () => {
       if (!pivotRef.current) return;
-      // Snapshot original transforms
+      isDragging.current = true;
+      // Snapshot original transforms from current store state
       originals.current.clear();
-      for (const obj of selectedObjects) {
-        originals.current.set(obj.id, {
+      const currentState = useProjectStore.getState();
+      const currentScene = currentState.project?.scenes[scene.id];
+      if (!currentScene) return;
+      for (const id of selectedObjectIds) {
+        const obj = currentScene.objects[id];
+        if (!obj) continue;
+        originals.current.set(id, {
           pos: new THREE.Vector3(obj.transform.position.x, obj.transform.position.y, obj.transform.position.z),
           rot: new THREE.Euler(obj.transform.rotation.x, obj.transform.rotation.y, obj.transform.rotation.z),
           scl: new THREE.Vector3(obj.transform.scale.x, obj.transform.scale.y, obj.transform.scale.z),
@@ -102,71 +164,28 @@ const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
       };
     };
 
+    // Live update during drag (no undo push)
+    const onChange = () => {
+      if (!isDragging.current) return;
+      applyGroupTransform(setObjectTransformLive);
+    };
+
+    // Final commit on drag end (pushes undo via regular setter)
     const onDragEnd = () => {
-      if (!pivotRef.current || !pivotStart.current) return;
-      const pivot = pivotRef.current;
-      const start = pivotStart.current;
-
-      for (const obj of selectedObjects) {
-        const orig = originals.current.get(obj.id);
-        if (!orig) continue;
-
-        if (gizmoMode === 'translate') {
-          // Apply translation delta
-          const delta = new THREE.Vector3().subVectors(pivot.position, start.pos);
-          const newPos = orig.pos.clone().add(delta);
-          setObjectTransform(scene.id, obj.id, {
-            ...obj.transform,
-            position: { x: newPos.x, y: newPos.y, z: newPos.z },
-          });
-        } else if (gizmoMode === 'rotate') {
-          // Rotate each object's position around the centroid
-          const rotDelta = new THREE.Quaternion().setFromEuler(pivot.rotation);
-          const startRot = new THREE.Quaternion().setFromEuler(start.rot);
-          const deltaQuat = rotDelta.multiply(startRot.invert());
-
-          // Rotate position relative to centroid
-          const relPos = orig.pos.clone().sub(start.pos);
-          relPos.applyQuaternion(deltaQuat);
-          const newPos = relPos.add(pivot.position);
-
-          // Rotate the object itself
-          const objQuat = new THREE.Quaternion().setFromEuler(orig.rot);
-          objQuat.premultiply(deltaQuat);
-          const newRot = new THREE.Euler().setFromQuaternion(objQuat);
-
-          setObjectTransform(scene.id, obj.id, {
-            ...obj.transform,
-            position: { x: newPos.x, y: newPos.y, z: newPos.z },
-            rotation: { x: newRot.x, y: newRot.y, z: newRot.z, w: 1 },
-          });
-        } else if (gizmoMode === 'scale') {
-          // Scale positions relative to centroid and scale objects
-          const scaleFactor = new THREE.Vector3().copy(pivot.scale).divide(start.scl);
-          const relPos = orig.pos.clone().sub(start.pos);
-          relPos.multiply(scaleFactor);
-          const newPos = relPos.add(pivot.position);
-          const newScl = orig.scl.clone().multiply(scaleFactor);
-
-          setObjectTransform(scene.id, obj.id, {
-            ...obj.transform,
-            position: { x: newPos.x, y: newPos.y, z: newPos.z },
-            scale: { x: newScl.x, y: newScl.y, z: newScl.z },
-          });
-        }
-      }
-
-      // Reset pivot to new centroid after transform
+      isDragging.current = false;
+      applyGroupTransform(setObjectTransform);
       pivotStart.current = null;
     };
 
     controls.addEventListener('mouseDown', onDragStart);
+    controls.addEventListener('change', onChange);
     controls.addEventListener('mouseUp', onDragEnd);
     return () => {
       controls.removeEventListener('mouseDown', onDragStart);
+      controls.removeEventListener('change', onChange);
       controls.removeEventListener('mouseUp', onDragEnd);
     };
-  }, [selectedObjects, gizmoMode, scene.id, setObjectTransform]);
+  }, [selectedObjectIds, scene.id, gizmoMode, applyGroupTransform, setObjectTransform, setObjectTransformLive]);
 
   if (!centroid || selectedObjects.length < 2 || !gizmoMode) return null;
 
