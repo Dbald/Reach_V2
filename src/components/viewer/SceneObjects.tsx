@@ -175,32 +175,6 @@ const GroupTransformGizmo: React.FC<{ scene: Scene }> = ({ scene }) => {
       isDragging.current = false;
       applyGroupTransform(setObjectTransform);
       pivotStart.current = null;
-
-      // Reset pivot transform so the gizmo re-appears correctly at the new centroid.
-      // Without this, TransformControls leaves stale rotation/scale on the pivot object
-      // which collapses the gizmo to a dot.
-      requestAnimationFrame(() => {
-        if (!pivotRef.current) return;
-        // Recompute centroid from fresh store state
-        const freshState = useProjectStore.getState();
-        const freshScene = freshState.project?.scenes[scene.id];
-        if (!freshScene) return;
-        const ids = freshState.editor.selectedObjectIds;
-        let sx = 0, sy = 0, sz = 0, count = 0;
-        for (const id of ids) {
-          const o = freshScene.objects[id];
-          if (!o) continue;
-          sx += o.transform.position.x;
-          sy += o.transform.position.y;
-          sz += o.transform.position.z;
-          count++;
-        }
-        if (count > 0) {
-          pivotRef.current.position.set(sx / count, sy / count, sz / count);
-        }
-        pivotRef.current.rotation.set(0, 0, 0);
-        pivotRef.current.scale.set(1, 1, 1);
-      });
     };
 
     controls.addEventListener('mouseDown', onDragStart);
