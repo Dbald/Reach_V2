@@ -898,6 +898,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   const activeStage = obj.growthStages && obj.growthStages.length > 0
     ? obj.growthStages[obj.activeStageIndex ?? 0]
     : null;
+  const activeStageIndex = obj.activeStageIndex ?? 0;
 
   // Resolve model URL for growth stage (direct URL or asset reference)
   const stageModelUrl = activeStage
@@ -912,16 +913,22 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
     return (
       <>
-        <group ref={meshCallback as any} position={stagePos} scale={stageScale} rotation={rotation}>
-          <Suspense fallback={<GltfFallback />}>
-            <GltfModel url={stageModelUrl} onClick={handleClick} onPointerDown={handlePointerDown} />
-          </Suspense>
-          {isSelected && (
-            <Html center position={[0, 2.2, 0]} style={{ pointerEvents: 'none' }}>
-              <div style={labelStyle('#3b82f6')}>{obj.name}</div>
-            </Html>
-          )}
-        </group>
+        <GrowthTransition
+          stageIndex={activeStageIndex}
+          targetPos={stagePos}
+          targetScale={stageScale}
+        >
+          <group ref={meshCallback as any} rotation={rotation}>
+            <Suspense fallback={<GltfFallback />}>
+              <GltfModel url={stageModelUrl} onClick={handleClick} onPointerDown={handlePointerDown} />
+            </Suspense>
+            {isSelected && (
+              <Html center position={[0, 2.2, 0]} style={{ pointerEvents: 'none' }}>
+                <div style={labelStyle('#3b82f6')}>{obj.name}</div>
+              </Html>
+            )}
+          </group>
+        </GrowthTransition>
         {/* Growth stage floating label */}
         <GrowthStageLabel stage={activeStage} position={stagePos} scaleY={stageScale[1]} />
         {gizmoElement}
@@ -953,48 +960,132 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   const texAssetId = obj.material?.textureAssetId;
   const texUrl = texAssetId && project ? project.assets[texAssetId]?.url : null;
 
+  // Wrap primitives with growth transition when stages are present
+  const meshContent = (
+    <mesh
+      ref={meshCallback as any}
+      onClick={handleClick}
+      onPointerDown={handlePointerDown}
+      castShadow
+      receiveShadow
+    >
+      {renderGeometry()}
+      {texUrl ? (
+        <TexturedMaterial
+          url={texUrl}
+          color={effectiveColor}
+          isSelected={isSelected}
+          roughness={obj.material?.roughness ?? 0.7}
+          metalness={obj.material?.metalness ?? 0.1}
+          side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
+          wireframe={isWireframe}
+        />
+      ) : (
+        <meshStandardMaterial
+          color={effectiveColor}
+          transparent={isSelected}
+          opacity={isSelected ? 0.85 : 1}
+          roughness={obj.material?.roughness ?? 0.7}
+          metalness={obj.material?.metalness ?? 0.1}
+          side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
+          wireframe={isWireframe}
+        />
+      )}
+      {selectionOutline}
+    </mesh>
+  );
+
+  if (activeStage) {
+    return (
+      <>
+        <GrowthTransition
+          stageIndex={activeStageIndex}
+          targetPos={effectivePos}
+          targetScale={effectiveScale}
+        >
+          {meshContent}
+        </GrowthTransition>
+        <GrowthStageLabel stage={activeStage} position={effectivePos} scaleY={effectiveScale[1]} />
+        {gizmoElement}
+      </>
+    );
+  }
+
   return (
     <>
-      <mesh
-        ref={meshCallback as any}
-        position={effectivePos}
-        scale={effectiveScale}
-        rotation={rotation}
-        onClick={handleClick}
-        onPointerDown={handlePointerDown}
-        castShadow
-        receiveShadow
-      >
-        {renderGeometry()}
-        {texUrl ? (
-          <TexturedMaterial
-            url={texUrl}
-            color={effectiveColor}
-            isSelected={isSelected}
-            roughness={obj.material?.roughness ?? 0.7}
-            metalness={obj.material?.metalness ?? 0.1}
-            side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
-            wireframe={isWireframe}
-          />
-        ) : (
-          <meshStandardMaterial
-            color={effectiveColor}
-            transparent={isSelected}
-            opacity={isSelected ? 0.85 : 1}
-            roughness={obj.material?.roughness ?? 0.7}
-            metalness={obj.material?.metalness ?? 0.1}
-            side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
-            wireframe={isWireframe}
-          />
-        )}
-        {selectionOutline}
-      </mesh>
-      {/* Growth stage floating label */}
-      {activeStage && (
-        <GrowthStageLabel stage={activeStage} position={effectivePos} scaleY={effectiveScale[1]} />
-      )}
+      <group position={effectivePos} scale={effectiveScale}>
+        {meshContent}
+      </group>
       {gizmoElement}
     </>
+  );
+};
+
+/** Smooth transition wrapper for growth stage changes.
+ *  Lerps position and scale, and does a quick fade-out/fade-in on stage switch. */
+const GROWTH_TRANSITION_SPEED = 4; // higher = faster
+const GrowthTransition: React.FC<{
+  stageIndex: number;
+  targetPos: [number, number, number];
+  targetScale: [number, number, number];
+  children: React.ReactNode;
+}> = ({ stageIndex, targetPos, targetScale, children }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const prevStageRef = useRef(stageIndex);
+  const fadeProgress = useRef(1); // 0 = invisible, 1 = fully visible
+  const isFading = useRef(false);
+
+  // Detect stage change → trigger fade
+  useEffect(() => {
+    if (prevStageRef.current !== stageIndex) {
+      prevStageRef.current = stageIndex;
+      fadeProgress.current = 0;
+      isFading.current = true;
+    }
+  }, [stageIndex]);
+
+  useFrame((_, delta) => {
+    const g = groupRef.current;
+    if (!g) return;
+
+    const speed = GROWTH_TRANSITION_SPEED * delta;
+
+    // Lerp position
+    g.position.x += (targetPos[0] - g.position.x) * Math.min(speed, 1);
+    g.position.y += (targetPos[1] - g.position.y) * Math.min(speed, 1);
+    g.position.z += (targetPos[2] - g.position.z) * Math.min(speed, 1);
+
+    // Lerp scale
+    g.scale.x += (targetScale[0] - g.scale.x) * Math.min(speed, 1);
+    g.scale.y += (targetScale[1] - g.scale.y) * Math.min(speed, 1);
+    g.scale.z += (targetScale[2] - g.scale.z) * Math.min(speed, 1);
+
+    // Fade in after stage switch
+    if (isFading.current) {
+      fadeProgress.current = Math.min(fadeProgress.current + delta * 3, 1);
+      if (fadeProgress.current >= 1) isFading.current = false;
+    }
+
+    // Apply opacity to all mesh materials in the group
+    g.traverse((child: any) => {
+      if (child.isMesh && child.material) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of mats) {
+          if (isFading.current) {
+            mat.transparent = true;
+            mat.opacity = fadeProgress.current;
+          } else if (mat.opacity < 1 && !mat.userData?.keepTransparent) {
+            mat.opacity = 1;
+          }
+        }
+      }
+    });
+  });
+
+  return (
+    <group ref={groupRef} position={targetPos} scale={targetScale}>
+      {children}
+    </group>
   );
 };
 
