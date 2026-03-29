@@ -64,6 +64,8 @@ export interface GrowthStage {
   assetId?: string;
   /** Optional metadata displayed on the label */
   info?: Record<string, string>;
+  /** User-adjusted transform for this stage (saved when user moves/scales/rotates) */
+  userTransform?: Transform;
 }
 
 // --- Scene objects ---

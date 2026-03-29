@@ -378,6 +378,10 @@ export const useProjectStore = create<ProjectStore>()(
           },
         };
         obj.transform = clamped;
+        // Persist to active growth stage so switching stages remembers adjustments
+        if (obj.growthStages && obj.activeStageIndex != null && obj.growthStages[obj.activeStageIndex]) {
+          obj.growthStages[obj.activeStageIndex].userTransform = JSON.parse(JSON.stringify(clamped));
+        }
       });
     },
 
@@ -393,6 +397,9 @@ export const useProjectStore = create<ProjectStore>()(
           },
         };
         obj.transform = clamped;
+        if (obj.growthStages && obj.activeStageIndex != null && obj.growthStages[obj.activeStageIndex]) {
+          obj.growthStages[obj.activeStageIndex].userTransform = JSON.parse(JSON.stringify(clamped));
+        }
       });
     },
 
@@ -740,6 +747,11 @@ export const useProjectStore = create<ProjectStore>()(
                   if (obj.growthStages[i].year <= year) bestIdx = i;
                 }
                 obj.activeStageIndex = bestIdx;
+                // Restore user-adjusted transform for this stage
+                const stage = obj.growthStages[bestIdx];
+                if (stage.userTransform) {
+                  obj.transform = JSON.parse(JSON.stringify(stage.userTransform));
+                }
               }
             }
           }
@@ -764,6 +776,11 @@ export const useProjectStore = create<ProjectStore>()(
         if (!obj || !obj.growthStages) return;
         if (stageIndex >= 0 && stageIndex < obj.growthStages.length) {
           obj.activeStageIndex = stageIndex;
+          // Restore user-adjusted transform for this stage
+          const stage = obj.growthStages[stageIndex];
+          if (stage.userTransform) {
+            obj.transform = JSON.parse(JSON.stringify(stage.userTransform));
+          }
         }
       });
     },

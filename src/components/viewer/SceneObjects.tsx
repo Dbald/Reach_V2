@@ -906,10 +906,9 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
   // If growth stage has a 3D model, render it as a GLTF
   if (activeStage && stageModelUrl) {
-    const stageScale: [number, number, number] = [activeStage.scale[0], activeStage.scale[1], activeStage.scale[2]];
-    const stagePos: [number, number, number] = activeStage.yOffset !== undefined
-      ? [pos[0], activeStage.yOffset, pos[2]]
-      : pos;
+    // Use the object's current transform (which includes any user adjustments saved per-stage)
+    const stageScale: [number, number, number] = scale;
+    const stagePos: [number, number, number] = pos;
 
     return (
       <>
@@ -941,11 +940,11 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     }
   };
 
-  // If growth stage is active, override scale and position offset
-  const effectiveScale: [number, number, number] = activeStage
+  // If growth stage is active, use default stage values only if user hasn't adjusted yet
+  const effectiveScale: [number, number, number] = activeStage && !activeStage.userTransform
     ? [activeStage.scale[0], activeStage.scale[1], activeStage.scale[2]]
     : scale;
-  const effectivePos: [number, number, number] = activeStage?.yOffset !== undefined
+  const effectivePos: [number, number, number] = activeStage && !activeStage.userTransform && activeStage.yOffset !== undefined
     ? [pos[0], activeStage.yOffset, pos[2]]
     : pos;
   const effectiveColor = activeStage?.color || getColor();

@@ -48,7 +48,8 @@ export const PropertyInspector: React.FC = () => {
       ...styles.panel,
       width: visible ? 260 : 0,
       opacity: visible ? 1 : 0,
-      overflow: 'hidden',
+      overflowX: 'hidden',
+      overflowY: visible ? 'auto' : 'hidden',
       transition: 'width 0.2s ease, opacity 0.2s ease',
     }}>
       {selectedObjectIds.length > 1 && (
