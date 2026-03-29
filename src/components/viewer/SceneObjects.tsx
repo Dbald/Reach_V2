@@ -245,12 +245,14 @@ const GltfModel: React.FC<{
       const s = targetSize / maxDim;
       clone.scale.multiplyScalar(s);
 
-      // Re-center so the model sits on its base (y=0)
+      // Re-compute bounding box after scaling
       box.setFromObject(clone);
       box.getCenter(center);
-      const minY = box.min.y;
-      clone.position.sub(center);
-      clone.position.y -= minY; // sit on ground
+
+      // Center on XZ and sit base at y=0
+      clone.position.x = -center.x;
+      clone.position.y = -box.min.y;
+      clone.position.z = -center.z;
     }
 
     return clone;
