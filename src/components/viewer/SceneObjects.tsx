@@ -897,7 +897,38 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     ? obj.growthStages[obj.activeStageIndex ?? 0]
     : null;
 
-  // --- Default mesh ---
+  // Resolve model URL for growth stage (direct URL or asset reference)
+  const stageModelUrl = activeStage
+    ? activeStage.modelUrl || (activeStage.assetId && project ? project.assets[activeStage.assetId]?.url : undefined)
+    : undefined;
+
+  // If growth stage has a 3D model, render it as a GLTF
+  if (activeStage && stageModelUrl) {
+    const stageScale: [number, number, number] = [activeStage.scale[0], activeStage.scale[1], activeStage.scale[2]];
+    const stagePos: [number, number, number] = activeStage.yOffset !== undefined
+      ? [pos[0], activeStage.yOffset, pos[2]]
+      : pos;
+
+    return (
+      <>
+        <group ref={meshCallback as any} position={stagePos} scale={stageScale} rotation={rotation}>
+          <Suspense fallback={<GltfFallback />}>
+            <GltfModel url={stageModelUrl} onClick={handleClick} onPointerDown={handlePointerDown} />
+          </Suspense>
+          {isSelected && (
+            <Html center position={[0, 2.2, 0]} style={{ pointerEvents: 'none' }}>
+              <div style={labelStyle('#3b82f6')}>{obj.name}</div>
+            </Html>
+          )}
+        </group>
+        {/* Growth stage floating label */}
+        <GrowthStageLabel stage={activeStage} position={stagePos} scaleY={stageScale[1]} />
+        {gizmoElement}
+      </>
+    );
+  }
+
+  // --- Default mesh (primitives, with optional growth stage overrides) ---
   const shape = activeStage?.shape || (obj.metadata?.shape as string) || 'box';
   const renderGeometry = () => {
     switch (shape) {
@@ -959,35 +990,44 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
       </mesh>
       {/* Growth stage floating label */}
       {activeStage && (
-        <Html
-          center
-          position={[effectivePos[0], effectivePos[1] + effectiveScale[1] * 0.5 + 0.3, effectivePos[2]]}
-          style={{ pointerEvents: 'none' }}
-        >
-          <div style={{
-            background: 'rgba(15, 23, 42, 0.9)',
-            color: '#22c55e',
-            padding: '3px 8px',
-            borderRadius: 4,
-            fontSize: 9,
-            fontWeight: 600,
-            whiteSpace: 'nowrap',
-            border: '1px solid rgba(34, 197, 94, 0.3)',
-            textAlign: 'center',
-          }}>
-            <div>{activeStage.label}</div>
-            {activeStage.info && (
-              <div style={{ color: '#94a3b8', fontSize: 8, marginTop: 1 }}>
-                {Object.entries(activeStage.info).map(([k, v]) => `${k}: ${v}`).join(' · ')}
-              </div>
-            )}
-          </div>
-        </Html>
+        <GrowthStageLabel stage={activeStage} position={effectivePos} scaleY={effectiveScale[1]} />
       )}
       {gizmoElement}
     </>
   );
 };
+
+/** Floating label for growth stages — shows stage name and metadata */
+const GrowthStageLabel: React.FC<{
+  stage: { label: string; info?: Record<string, string> };
+  position: [number, number, number];
+  scaleY: number;
+}> = ({ stage, position, scaleY }) => (
+  <Html
+    center
+    position={[position[0], position[1] + scaleY * 0.5 + 0.3, position[2]]}
+    style={{ pointerEvents: 'none' }}
+  >
+    <div style={{
+      background: 'rgba(15, 23, 42, 0.9)',
+      color: '#22c55e',
+      padding: '3px 8px',
+      borderRadius: 4,
+      fontSize: 9,
+      fontWeight: 600,
+      whiteSpace: 'nowrap',
+      border: '1px solid rgba(34, 197, 94, 0.3)',
+      textAlign: 'center',
+    }}>
+      <div>{stage.label}</div>
+      {stage.info && (
+        <div style={{ color: '#94a3b8', fontSize: 8, marginTop: 1 }}>
+          {Object.entries(stage.info).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+        </div>
+      )}
+    </div>
+  </Html>
+);
 
 /** Loads a texture from URL and applies it to a mesh */
 const TexturedMaterial: React.FC<{

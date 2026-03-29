@@ -58,8 +58,10 @@ export interface GrowthStage {
   scale: [number, number, number];
   color?: string;
   yOffset?: number;
-  /** Optional GLB model URL for this stage */
+  /** Direct GLB model URL for this stage */
   modelUrl?: string;
+  /** Reference to an asset in the project's asset library */
+  assetId?: string;
   /** Optional metadata displayed on the label */
   info?: Record<string, string>;
 }

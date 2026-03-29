@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useProjectStore } from '@/store';
-import type { SceneObject, Vector3, Quaternion } from '@/types';
+import type { SceneObject, Vector3, Quaternion, GrowthStage } from '@/types';
+import { detectFormat, createAssetFromFile, processAsset } from '@/services/assetPipeline';
 
 export const PropertyInspector: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -72,6 +73,8 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
   const project = useProjectStore((s) => s.project);
   const setObjectActiveStage = useProjectStore((s) => s.setObjectActiveStage);
   const setActiveGrowthYear = useProjectStore((s) => s.setActiveGrowthYear);
+  const setObjectGrowthStages = useProjectStore((s) => s.setObjectGrowthStages);
+  const updateAsset = useProjectStore((s) => s.updateAsset);
 
   const handleVec3Change = (
     field: 'position' | 'scale',
@@ -397,38 +400,16 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
 
       {/* Growth Staging */}
       {obj.growthStages && obj.growthStages.length > 0 && (
-        <Section title="Growth Stages">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {obj.growthStages.map((stage, idx) => {
-              const isActiveStage = (obj.activeStageIndex ?? 0) === idx;
-              return (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setObjectActiveStage(sceneId, obj.id, idx);
-                    setActiveGrowthYear(stage.year);
-                  }}
-                  style={{
-                    ...styles.chip,
-                    width: '100%',
-                    textAlign: 'left' as const,
-                    padding: '6px 10px',
-                    ...(isActiveStage ? styles.chipActive : {}),
-                  }}
-                >
-                  <div style={{ fontWeight: isActiveStage ? 700 : 400, fontSize: 11 }}>
-                    {stage.label}
-                  </div>
-                  {stage.info && isActiveStage && (
-                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>
-                      {Object.entries(stage.info).map(([k, v]) => `${k}: ${v}`).join(' · ')}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
+        <GrowthStagesSection
+          obj={obj}
+          sceneId={sceneId}
+          project={project}
+          setObjectActiveStage={setObjectActiveStage}
+          setActiveGrowthYear={setActiveGrowthYear}
+          setObjectGrowthStages={setObjectGrowthStages}
+          addAsset={addAsset}
+          updateAsset={updateAsset}
+        />
       )}
 
       {/* Physics / Collision - available for all visual object types */}
@@ -473,6 +454,157 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
         </Section>
       )}
     </div>
+  );
+};
+
+/** Growth Stages section with per-stage model upload */
+const GrowthStagesSection: React.FC<{
+  obj: SceneObject;
+  sceneId: string;
+  project: any;
+  setObjectActiveStage: (sceneId: string, objectId: string, idx: number) => void;
+  setActiveGrowthYear: (year: number | null) => void;
+  setObjectGrowthStages: (sceneId: string, objectId: string, stages: GrowthStage[]) => void;
+  addAsset: (asset: any) => void;
+  updateAsset: (assetId: string, updates: any) => void;
+}> = ({ obj, sceneId, project, setObjectActiveStage, setActiveGrowthYear, setObjectGrowthStages, addAsset, updateAsset }) => {
+
+  const handleModelUpload = useCallback(async (stageIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !obj.growthStages) return;
+
+    const format = detectFormat(file.name);
+    if (!format || !['glb', 'gltf', 'obj', 'fbx'].includes(format)) return;
+
+    // Create asset entry
+    const asset = createAssetFromFile(file);
+    addAsset(asset);
+
+    // Process asset
+    if (asset.status !== 'error') {
+      const processed = await processAsset(asset);
+      updateAsset(asset.id, processed);
+    }
+
+    // Update the growth stage with the asset reference
+    const updatedStages = obj.growthStages.map((stage, idx) => {
+      if (idx === stageIdx) {
+        return { ...stage, assetId: asset.id, modelUrl: undefined };
+      }
+      return stage;
+    });
+    setObjectGrowthStages(sceneId, obj.id, updatedStages);
+    e.target.value = '';
+  }, [obj.growthStages, obj.id, sceneId, addAsset, updateAsset, setObjectGrowthStages]);
+
+  const handleRemoveModel = useCallback((stageIdx: number) => {
+    if (!obj.growthStages) return;
+    const updatedStages = obj.growthStages.map((stage, idx) => {
+      if (idx === stageIdx) {
+        return { ...stage, assetId: undefined, modelUrl: undefined };
+      }
+      return stage;
+    });
+    setObjectGrowthStages(sceneId, obj.id, updatedStages);
+  }, [obj.growthStages, obj.id, sceneId, setObjectGrowthStages]);
+
+  if (!obj.growthStages || obj.growthStages.length === 0) return null;
+
+  return (
+    <Section title="Growth Stages">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {obj.growthStages.map((stage, idx) => {
+          const isActiveStage = (obj.activeStageIndex ?? 0) === idx;
+          const stageAsset = stage.assetId && project ? project.assets[stage.assetId] : null;
+          const hasModel = !!(stage.modelUrl || stageAsset);
+
+          return (
+            <div
+              key={idx}
+              style={{
+                borderRadius: 6,
+                border: `1px solid ${isActiveStage ? '#3b82f6' : '#334155'}`,
+                background: isActiveStage ? '#1e293b' : '#0a0a1a',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Stage header — click to activate */}
+              <button
+                onClick={() => {
+                  setObjectActiveStage(sceneId, obj.id, idx);
+                  setActiveGrowthYear(stage.year);
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left' as const,
+                  padding: '6px 10px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: isActiveStage ? '#fff' : '#94a3b8',
+                }}
+              >
+                <div style={{ fontWeight: isActiveStage ? 700 : 400, fontSize: 11 }}>
+                  {stage.label}
+                </div>
+                {stage.info && isActiveStage && (
+                  <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>
+                    {Object.entries(stage.info).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                  </div>
+                )}
+              </button>
+
+              {/* Model section — always visible */}
+              <div style={{
+                padding: '4px 10px 6px',
+                borderTop: '1px solid #1e293b',
+                fontSize: 10,
+              }}>
+                {hasModel ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#22c55e', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 10 }}>{'\u2713'}</span>
+                      {stageAsset ? stageAsset.name : '3D Model'}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveModel(idx)}
+                      style={{
+                        background: 'none', border: 'none', color: '#ef4444',
+                        fontSize: 9, cursor: 'pointer', padding: '1px 4px',
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <label style={{
+                    display: 'block',
+                    padding: '4px',
+                    borderRadius: 4,
+                    border: '1px dashed #334155',
+                    color: '#64748b',
+                    fontSize: 9,
+                    textAlign: 'center' as const,
+                    cursor: 'pointer',
+                  }}>
+                    <input
+                      type="file"
+                      accept=".glb,.gltf,.obj,.fbx"
+                      onChange={(e) => handleModelUpload(idx, e)}
+                      style={{ display: 'none' }}
+                    />
+                    Upload 3D Model (.glb)
+                  </label>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 9, color: '#475569', marginTop: 6, lineHeight: 1.3 }}>
+        Upload GLB models per stage. Without a model, primitive shapes are used as placeholders.
+      </div>
+    </Section>
   );
 };
 
