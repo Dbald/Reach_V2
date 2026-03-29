@@ -358,6 +358,12 @@ export const useProjectStore = create<ProjectStore>()(
             },
           },
         };
+        // Clear saved per-stage transforms so the duplicate uses its own position
+        if (clone.growthStages) {
+          for (const stage of clone.growthStages) {
+            delete stage.userTransform;
+          }
+        }
         scene.objects[newId] = clone;
         state.project!.updatedAt = new Date().toISOString();
       });
@@ -539,6 +545,11 @@ export const useProjectStore = create<ProjectStore>()(
               position: { ...original.transform.position, x: original.transform.position.x + 1 },
             },
           };
+          if (clone.growthStages) {
+            for (const stage of clone.growthStages) {
+              delete stage.userTransform;
+            }
+          }
           scene.objects[newId] = clone;
         }
         state.editor.selectedObjectIds = newIds;
@@ -747,10 +758,14 @@ export const useProjectStore = create<ProjectStore>()(
                   if (obj.growthStages[i].year <= year) bestIdx = i;
                 }
                 obj.activeStageIndex = bestIdx;
-                // Restore user-adjusted transform for this stage
+                // Restore user-adjusted transform for this stage, or
+                // snapshot current position so the object doesn't jump
                 const stage = obj.growthStages[bestIdx];
                 if (stage.userTransform) {
                   obj.transform = JSON.parse(JSON.stringify(stage.userTransform));
+                } else {
+                  // First visit to this stage — keep current XZ, apply stage defaults
+                  stage.userTransform = JSON.parse(JSON.stringify(obj.transform));
                 }
               }
             }
@@ -776,10 +791,13 @@ export const useProjectStore = create<ProjectStore>()(
         if (!obj || !obj.growthStages) return;
         if (stageIndex >= 0 && stageIndex < obj.growthStages.length) {
           obj.activeStageIndex = stageIndex;
-          // Restore user-adjusted transform for this stage
+          // Restore user-adjusted transform for this stage, or
+          // snapshot current position so the object doesn't jump
           const stage = obj.growthStages[stageIndex];
           if (stage.userTransform) {
             obj.transform = JSON.parse(JSON.stringify(stage.userTransform));
+          } else {
+            stage.userTransform = JSON.parse(JSON.stringify(obj.transform));
           }
         }
       });
