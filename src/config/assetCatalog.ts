@@ -4,6 +4,8 @@
  * and Sketchfab search integration.
  */
 
+import type { GrowthStage } from '@/types';
+
 export type AssetCategory =
   | 'surfaces'
   | 'plants'
@@ -36,6 +38,8 @@ export interface CatalogItem {
   /** For sketchfab: UID for embedding/download */
   sketchfabUid?: string;
   tags: string[];
+  /** Growth stages for time-based visualization */
+  growthStages?: GrowthStage[];
 }
 
 export const CATALOG_CATEGORIES: CatalogCategory[] = [
@@ -52,10 +56,28 @@ export const CATALOG_CATEGORIES: CatalogCategory[] = [
 /** Built-in procedural assets that don't require downloading */
 export const CATALOG_ITEMS: CatalogItem[] = [
   // Plants
-  { id: 'tree-oak',        name: 'Oak Tree',          category: 'plants', type: 'primitive', primitive: { shape: 'sphere', scale: [2, 4, 2], color: '#3a7a2a', yOffset: 2 }, tags: ['tree', 'large'] },
-  { id: 'tree-pine',       name: 'Pine Tree',         category: 'plants', type: 'primitive', primitive: { shape: 'cylinder', scale: [1, 5, 1], color: '#2d5a1e', yOffset: 2.5 }, tags: ['tree', 'evergreen'] },
-  { id: 'shrub-round',     name: 'Round Shrub',       category: 'plants', type: 'primitive', primitive: { shape: 'sphere', scale: [1, 0.8, 1], color: '#4a8a3a', yOffset: 0.4 }, tags: ['shrub', 'hedge'] },
-  { id: 'shrub-tall',      name: 'Tall Hedge',        category: 'plants', type: 'primitive', primitive: { shape: 'box', scale: [0.5, 1.5, 2], color: '#3d7a2d', yOffset: 0.75 }, tags: ['hedge', 'privacy'] },
+  { id: 'tree-oak', name: 'Oak Tree', category: 'plants', type: 'primitive', primitive: { shape: 'sphere', scale: [2, 4, 2], color: '#3a7a2a', yOffset: 2 }, tags: ['tree', 'large', 'growth'], growthStages: [
+    { year: 1,  label: '1 Year — Sapling',     shape: 'cylinder', scale: [0.2, 1.2, 0.2], color: '#5a9a3a', yOffset: 0.6, info: { height: '1.2m', water: 'High', type: 'Quercus robur' } },
+    { year: 3,  label: '3 Years — Young Tree',  shape: 'sphere',   scale: [0.8, 2.0, 0.8], color: '#4a8a2a', yOffset: 1.0, info: { height: '2.0m', water: 'Moderate', type: 'Quercus robur' } },
+    { year: 5,  label: '5 Years — Juvenile',     shape: 'sphere',   scale: [1.2, 3.0, 1.2], color: '#3a7a2a', yOffset: 1.5, info: { height: '4m', water: 'Moderate', type: 'Quercus robur' } },
+    { year: 10, label: '10 Years — Mature',      shape: 'sphere',   scale: [2.0, 4.0, 2.0], color: '#2a6a1a', yOffset: 2.0, info: { height: '8m', water: 'Low', type: 'Quercus robur' } },
+  ] },
+  { id: 'tree-pine', name: 'Pine Tree', category: 'plants', type: 'primitive', primitive: { shape: 'cylinder', scale: [1, 5, 1], color: '#2d5a1e', yOffset: 2.5 }, tags: ['tree', 'evergreen', 'growth'], growthStages: [
+    { year: 1,  label: '1 Year — Seedling',   shape: 'cylinder', scale: [0.15, 0.8, 0.15], color: '#4d7a3e', yOffset: 0.4, info: { height: '0.8m', water: 'High', type: 'Pinus sylvestris' } },
+    { year: 3,  label: '3 Years — Young Pine', shape: 'cylinder', scale: [0.4, 2.0, 0.4],  color: '#3d6a2e', yOffset: 1.0, info: { height: '2m', water: 'Moderate', type: 'Pinus sylvestris' } },
+    { year: 5,  label: '5 Years — Growing',    shape: 'cylinder', scale: [0.7, 3.5, 0.7],  color: '#2d5a1e', yOffset: 1.75, info: { height: '5m', water: 'Low', type: 'Pinus sylvestris' } },
+    { year: 10, label: '10 Years — Tall Pine',  shape: 'cylinder', scale: [1.0, 5.0, 1.0],  color: '#1d4a0e', yOffset: 2.5, info: { height: '10m', water: 'Low', type: 'Pinus sylvestris' } },
+  ] },
+  { id: 'shrub-round', name: 'Round Shrub', category: 'plants', type: 'primitive', primitive: { shape: 'sphere', scale: [1, 0.8, 1], color: '#4a8a3a', yOffset: 0.4 }, tags: ['shrub', 'hedge', 'growth'], growthStages: [
+    { year: 1,  label: '1 Year — Small Shrub',  shape: 'sphere', scale: [0.3, 0.25, 0.3], color: '#5a9a4a', yOffset: 0.12, info: { height: '0.25m', water: 'Moderate' } },
+    { year: 3,  label: '3 Years — Medium Shrub', shape: 'sphere', scale: [0.6, 0.5, 0.6],  color: '#4a8a3a', yOffset: 0.25, info: { height: '0.5m', water: 'Low' } },
+    { year: 5,  label: '5 Years — Full Shrub',   shape: 'sphere', scale: [1.0, 0.8, 1.0],  color: '#3a7a2a', yOffset: 0.4, info: { height: '0.8m', water: 'Low' } },
+  ] },
+  { id: 'shrub-tall',      name: 'Tall Hedge',        category: 'plants', type: 'primitive', primitive: { shape: 'box', scale: [0.5, 1.5, 2], color: '#3d7a2d', yOffset: 0.75 }, tags: ['hedge', 'privacy', 'growth'], growthStages: [
+    { year: 1,  label: '1 Year — New Hedge',    shape: 'box', scale: [0.3, 0.5, 1.5],  color: '#5d9a4d', yOffset: 0.25, info: { height: '0.5m', water: 'Moderate' } },
+    { year: 3,  label: '3 Years — Growing',      shape: 'box', scale: [0.4, 1.0, 1.8],  color: '#4d8a3d', yOffset: 0.5, info: { height: '1m', water: 'Moderate' } },
+    { year: 5,  label: '5 Years — Full Height',  shape: 'box', scale: [0.5, 1.5, 2.0],  color: '#3d7a2d', yOffset: 0.75, info: { height: '1.5m', water: 'Low' } },
+  ] },
   { id: 'flower-bed',      name: 'Flower Bed',        category: 'plants', type: 'primitive', primitive: { shape: 'box', scale: [2, 0.15, 1], color: '#d4a0c0', yOffset: 0.08 }, tags: ['flowers', 'ground'] },
   { id: 'planter-box',     name: 'Raised Planter',    category: 'plants', type: 'primitive', primitive: { shape: 'box', scale: [2, 0.6, 1], color: '#8b6842', yOffset: 0.3 }, tags: ['planter', 'raised-bed'] },
 

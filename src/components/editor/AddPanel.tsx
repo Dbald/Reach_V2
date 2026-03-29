@@ -605,6 +605,7 @@ const AssetCatalogPanel: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       },
       tags: item.tags,
       metadata: { shape: p.shape, catalogId: item.id },
+      ...(item.growthStages ? { growthStages: item.growthStages, activeStageIndex: 0 } : {}),
     });
     selectObject(id);
   };
@@ -705,9 +706,21 @@ const AssetCatalogPanel: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   }} />
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: '#e2e8f0' }}>{item.name}</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {item.name}
+                    {item.growthStages && (
+                      <span style={{
+                        fontSize: 8, padding: '1px 4px', borderRadius: 3,
+                        background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e',
+                        fontWeight: 600, lineHeight: 1.2,
+                      }}>
+                        Growth
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 9, color: '#64748b' }}>
                     {item.tags.slice(0, 2).join(' \u00B7 ')}
+                    {item.growthStages && ` \u00B7 ${item.growthStages.length} stages`}
                   </div>
                 </div>
                 <button

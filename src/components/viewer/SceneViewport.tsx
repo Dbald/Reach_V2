@@ -8,6 +8,7 @@ import { SceneObjects } from './SceneObjects';
 import { ZoneVisualizer } from './ZoneVisualizer';
 import { FirstPersonControls } from './FirstPersonControls';
 import { ContextMenu } from '@/components/editor/ContextMenu';
+import { GrowthTimeline } from '@/components/editor/GrowthTimeline';
 import type { Scene } from '@/types';
 import { getGroundMaterial } from '@/config/groundMaterials';
 
@@ -117,6 +118,7 @@ export const SceneViewport: React.FC = () => {
       {/* Canvas overlays */}
       {viewMode === 'editor' && <CanvasToolbar />}
       {viewMode === 'editor' && <RenderModeSelector />}
+      <GrowthTimeline />
 
       {/* View mode indicator */}
       <div style={styles.modeIndicator}>

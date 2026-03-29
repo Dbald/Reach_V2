@@ -49,6 +49,21 @@ export interface AssetReference {
   updatedAt: string;
 }
 
+// --- Growth staging ---
+
+export interface GrowthStage {
+  year: number;
+  label: string;
+  shape?: 'box' | 'sphere' | 'cylinder' | 'plane';
+  scale: [number, number, number];
+  color?: string;
+  yOffset?: number;
+  /** Optional GLB model URL for this stage */
+  modelUrl?: string;
+  /** Optional metadata displayed on the label */
+  info?: Record<string, string>;
+}
+
 // --- Scene objects ---
 
 export type SceneObjectType =
@@ -85,6 +100,10 @@ export interface SceneObject {
   metadata: Record<string, unknown>;
   visible: boolean;
   locked: boolean;
+  /** Growth stages for time-based visualization (e.g., trees over years) */
+  growthStages?: GrowthStage[];
+  /** Index of the currently active growth stage */
+  activeStageIndex?: number;
 }
 
 // --- Zones and boundaries ---

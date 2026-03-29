@@ -12,6 +12,7 @@ import type {
   Transform,
   MaterialConfig,
   ValidationReport,
+  GrowthStage,
 } from '@/types';
 import { createProject, defaultTransform } from '@/utils/defaults';
 
@@ -54,6 +55,8 @@ interface EditorState {
   focusTargetId: string | null;
   isFocused: boolean;
   zoneDraw: ZoneDrawState;
+  /** Global growth year for the timeline (null = no staging active) */
+  activeGrowthYear: number | null;
 }
 
 const MAX_UNDO = 50;
@@ -126,6 +129,11 @@ interface ProjectStore {
   cancelZoneDraw: () => void;
   updateZoneDraw: (updates: Partial<ZoneDrawState>) => void;
 
+  // Growth staging
+  setActiveGrowthYear: (year: number | null) => void;
+  setObjectGrowthStages: (sceneId: string, objectId: string, stages: GrowthStage[]) => void;
+  setObjectActiveStage: (sceneId: string, objectId: string, stageIndex: number) => void;
+
   // Validation
   setValidationReport: (report: ValidationReport | null) => void;
 }
@@ -156,6 +164,7 @@ const defaultEditorState: EditorState = {
   showHierarchy: true,
   showInspector: true,
   showAssetTray: true,
+  activeGrowthYear: null,
 };
 
 export const useProjectStore = create<ProjectStore>()(
@@ -710,6 +719,50 @@ export const useProjectStore = create<ProjectStore>()(
     updateZoneDraw: (updates) => {
       set((state) => {
         Object.assign(state.editor.zoneDraw, updates);
+      });
+    },
+
+    // --- Growth staging ---
+    setActiveGrowthYear: (year) => {
+      set((state) => {
+        state.editor.activeGrowthYear = year;
+        // Update all objects with growth stages to match the year
+        if (state.project && state.editor.activeSceneId) {
+          const scene = state.project.scenes[state.editor.activeSceneId];
+          if (scene) {
+            for (const obj of Object.values(scene.objects)) {
+              if (obj.growthStages && obj.growthStages.length > 0 && year !== null) {
+                // Find the best matching stage for this year (closest <= year)
+                let bestIdx = 0;
+                for (let i = 0; i < obj.growthStages.length; i++) {
+                  if (obj.growthStages[i].year <= year) bestIdx = i;
+                }
+                obj.activeStageIndex = bestIdx;
+              }
+            }
+          }
+        }
+      });
+    },
+
+    setObjectGrowthStages: (sceneId, objectId, stages) => {
+      get()._pushUndo();
+      set((state) => {
+        const obj = state.project?.scenes[sceneId]?.objects[objectId];
+        if (!obj) return;
+        obj.growthStages = stages;
+        obj.activeStageIndex = 0;
+        state.project!.updatedAt = new Date().toISOString();
+      });
+    },
+
+    setObjectActiveStage: (sceneId, objectId, stageIndex) => {
+      set((state) => {
+        const obj = state.project?.scenes[sceneId]?.objects[objectId];
+        if (!obj || !obj.growthStages) return;
+        if (stageIndex >= 0 && stageIndex < obj.growthStages.length) {
+          obj.activeStageIndex = stageIndex;
+        }
       });
     },
 

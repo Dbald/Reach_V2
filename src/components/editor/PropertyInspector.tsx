@@ -70,6 +70,8 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
   const setObjectMaterial = useProjectStore((s) => s.setObjectMaterial);
   const addAsset = useProjectStore((s) => s.addAsset);
   const project = useProjectStore((s) => s.project);
+  const setObjectActiveStage = useProjectStore((s) => s.setObjectActiveStage);
+  const setActiveGrowthYear = useProjectStore((s) => s.setActiveGrowthYear);
 
   const handleVec3Change = (
     field: 'position' | 'scale',
@@ -392,6 +394,42 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
           ))}
         </div>
       </Section>
+
+      {/* Growth Staging */}
+      {obj.growthStages && obj.growthStages.length > 0 && (
+        <Section title="Growth Stages">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {obj.growthStages.map((stage, idx) => {
+              const isActiveStage = (obj.activeStageIndex ?? 0) === idx;
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setObjectActiveStage(sceneId, obj.id, idx);
+                    setActiveGrowthYear(stage.year);
+                  }}
+                  style={{
+                    ...styles.chip,
+                    width: '100%',
+                    textAlign: 'left' as const,
+                    padding: '6px 10px',
+                    ...(isActiveStage ? styles.chipActive : {}),
+                  }}
+                >
+                  <div style={{ fontWeight: isActiveStage ? 700 : 400, fontSize: 11 }}>
+                    {stage.label}
+                  </div>
+                  {stage.info && isActiveStage && (
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>
+                      {Object.entries(stage.info).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Section>
+      )}
 
       {/* Physics / Collision - available for all visual object types */}
       {(obj.type === 'mesh' || obj.type === 'video' || obj.type === 'audio' || obj.assetId) && (

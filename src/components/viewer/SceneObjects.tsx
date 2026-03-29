@@ -892,8 +892,13 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     }
   }
 
+  // --- Growth staging ---
+  const activeStage = obj.growthStages && obj.growthStages.length > 0
+    ? obj.growthStages[obj.activeStageIndex ?? 0]
+    : null;
+
   // --- Default mesh ---
-  const shape = (obj.metadata?.shape as string) || 'box';
+  const shape = activeStage?.shape || (obj.metadata?.shape as string) || 'box';
   const renderGeometry = () => {
     switch (shape) {
       case 'sphere': return <sphereGeometry args={[0.5, 32, 32]} />;
@@ -903,6 +908,15 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     }
   };
 
+  // If growth stage is active, override scale and position offset
+  const effectiveScale: [number, number, number] = activeStage
+    ? [activeStage.scale[0], activeStage.scale[1], activeStage.scale[2]]
+    : scale;
+  const effectivePos: [number, number, number] = activeStage?.yOffset !== undefined
+    ? [pos[0], activeStage.yOffset, pos[2]]
+    : pos;
+  const effectiveColor = activeStage?.color || getColor();
+
   // Check for texture
   const texAssetId = obj.material?.textureAssetId;
   const texUrl = texAssetId && project ? project.assets[texAssetId]?.url : null;
@@ -911,8 +925,8 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     <>
       <mesh
         ref={meshCallback as any}
-        position={pos}
-        scale={scale}
+        position={effectivePos}
+        scale={effectiveScale}
         rotation={rotation}
         onClick={handleClick}
         onPointerDown={handlePointerDown}
@@ -923,7 +937,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
         {texUrl ? (
           <TexturedMaterial
             url={texUrl}
-            color={getColor()}
+            color={effectiveColor}
             isSelected={isSelected}
             roughness={obj.material?.roughness ?? 0.7}
             metalness={obj.material?.metalness ?? 0.1}
@@ -932,7 +946,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
           />
         ) : (
           <meshStandardMaterial
-            color={getColor()}
+            color={effectiveColor}
             transparent={isSelected}
             opacity={isSelected ? 0.85 : 1}
             roughness={obj.material?.roughness ?? 0.7}
@@ -943,6 +957,33 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
         )}
         {selectionOutline}
       </mesh>
+      {/* Growth stage floating label */}
+      {activeStage && (
+        <Html
+          center
+          position={[effectivePos[0], effectivePos[1] + effectiveScale[1] * 0.5 + 0.3, effectivePos[2]]}
+          style={{ pointerEvents: 'none' }}
+        >
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.9)',
+            color: '#22c55e',
+            padding: '3px 8px',
+            borderRadius: 4,
+            fontSize: 9,
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            border: '1px solid rgba(34, 197, 94, 0.3)',
+            textAlign: 'center',
+          }}>
+            <div>{activeStage.label}</div>
+            {activeStage.info && (
+              <div style={{ color: '#94a3b8', fontSize: 8, marginTop: 1 }}>
+                {Object.entries(activeStage.info).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+              </div>
+            )}
+          </div>
+        </Html>
+      )}
       {gizmoElement}
     </>
   );
