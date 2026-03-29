@@ -7,18 +7,20 @@ import { useProjectStore } from '@/store';
  * Only visible when the scene contains objects with growthStages.
  */
 export const GrowthTimeline: React.FC = () => {
-  const project = useProjectStore((s) => s.project);
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const activeGrowthYear = useProjectStore((s) => s.editor.activeGrowthYear);
   const setActiveGrowthYear = useProjectStore((s) => s.setActiveGrowthYear);
+  // Subscribe directly to the scene objects so we re-render when objects are added/removed
+  const sceneObjects = useProjectStore((s) => {
+    if (!s.project || !s.editor.activeSceneId) return null;
+    return s.project.scenes[s.editor.activeSceneId]?.objects ?? null;
+  });
 
   // Collect all unique years from growth-staged objects in the scene
   const availableYears = useMemo(() => {
-    if (!project || !activeSceneId) return [];
-    const scene = project.scenes[activeSceneId];
-    if (!scene) return [];
+    if (!sceneObjects) return [];
     const yearSet = new Set<number>();
-    for (const obj of Object.values(scene.objects)) {
+    for (const obj of Object.values(sceneObjects)) {
       if (obj.growthStages && obj.growthStages.length > 0) {
         for (const stage of obj.growthStages) {
           yearSet.add(stage.year);
@@ -26,7 +28,7 @@ export const GrowthTimeline: React.FC = () => {
       }
     }
     return Array.from(yearSet).sort((a, b) => a - b);
-  }, [project, activeSceneId]);
+  }, [sceneObjects]);
 
   // Don't render if no staged objects exist
   if (availableYears.length === 0) return null;

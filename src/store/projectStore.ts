@@ -302,6 +302,8 @@ export const useProjectStore = create<ProjectStore>()(
           metadata: props?.metadata ?? {},
           visible: true,
           locked: false,
+          growthStages: props?.growthStages,
+          activeStageIndex: props?.activeStageIndex ?? (props?.growthStages ? 0 : undefined),
         };
         scene.objects[id] = obj;
         state.project!.updatedAt = new Date().toISOString();
