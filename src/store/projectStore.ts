@@ -305,6 +305,11 @@ export const useProjectStore = create<ProjectStore>()(
           growthStages: props?.growthStages,
           activeStageIndex: props?.activeStageIndex ?? (props?.growthStages ? 0 : undefined),
         };
+        // Apply first growth stage's scale to the initial transform
+        if (obj.growthStages && obj.growthStages.length > 0) {
+          const firstStage = obj.growthStages[0];
+          obj.transform.scale = { x: firstStage.scale[0], y: firstStage.scale[1], z: firstStage.scale[2] };
+        }
         scene.objects[id] = obj;
         state.project!.updatedAt = new Date().toISOString();
       });
