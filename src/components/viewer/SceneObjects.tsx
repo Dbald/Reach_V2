@@ -947,13 +947,10 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     }
   };
 
-  // If growth stage is active, use default stage values only if user hasn't adjusted yet
-  const effectiveScale: [number, number, number] = activeStage && !activeStage.userTransform
-    ? [activeStage.scale[0], activeStage.scale[1], activeStage.scale[2]]
-    : scale;
-  const effectivePos: [number, number, number] = activeStage && !activeStage.userTransform && activeStage.yOffset !== undefined
-    ? [pos[0], activeStage.yOffset, pos[2]]
-    : pos;
+  // Growth stages: position is always from the object (shared),
+  // scale/rotation are managed per-stage by the store
+  const effectiveScale: [number, number, number] = scale;
+  const effectivePos: [number, number, number] = pos;
   const effectiveColor = activeStage?.color || getColor();
 
   // Check for texture

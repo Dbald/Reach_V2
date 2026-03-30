@@ -361,7 +361,8 @@ export const useProjectStore = create<ProjectStore>()(
         // Clear saved per-stage transforms so the duplicate uses its own position
         if (clone.growthStages) {
           for (const stage of clone.growthStages) {
-            delete stage.userTransform;
+            delete stage.userScale;
+            delete stage.userRotation;
           }
         }
         scene.objects[newId] = clone;
@@ -375,7 +376,6 @@ export const useProjectStore = create<ProjectStore>()(
       set((state) => {
         const obj = state.project?.scenes[sceneId]?.objects[objectId];
         if (!obj) return;
-        // Clamp Y to ground level (objects can't go below y=0)
         const clamped = {
           ...transform,
           position: {
@@ -384,9 +384,11 @@ export const useProjectStore = create<ProjectStore>()(
           },
         };
         obj.transform = clamped;
-        // Persist to active growth stage so switching stages remembers adjustments
+        // Save scale + rotation per-stage (position is shared across all stages)
         if (obj.growthStages && obj.activeStageIndex != null && obj.growthStages[obj.activeStageIndex]) {
-          obj.growthStages[obj.activeStageIndex].userTransform = JSON.parse(JSON.stringify(clamped));
+          const stage = obj.growthStages[obj.activeStageIndex];
+          stage.userScale = { ...clamped.scale };
+          stage.userRotation = { ...clamped.rotation };
         }
       });
     },
@@ -404,7 +406,9 @@ export const useProjectStore = create<ProjectStore>()(
         };
         obj.transform = clamped;
         if (obj.growthStages && obj.activeStageIndex != null && obj.growthStages[obj.activeStageIndex]) {
-          obj.growthStages[obj.activeStageIndex].userTransform = JSON.parse(JSON.stringify(clamped));
+          const stage = obj.growthStages[obj.activeStageIndex];
+          stage.userScale = { ...clamped.scale };
+          stage.userRotation = { ...clamped.rotation };
         }
       });
     },
@@ -547,7 +551,8 @@ export const useProjectStore = create<ProjectStore>()(
           };
           if (clone.growthStages) {
             for (const stage of clone.growthStages) {
-              delete stage.userTransform;
+              delete stage.userScale;
+            delete stage.userRotation;
             }
           }
           scene.objects[newId] = clone;
@@ -746,26 +751,25 @@ export const useProjectStore = create<ProjectStore>()(
     setActiveGrowthYear: (year) => {
       set((state) => {
         state.editor.activeGrowthYear = year;
-        // Update all objects with growth stages to match the year
         if (state.project && state.editor.activeSceneId) {
           const scene = state.project.scenes[state.editor.activeSceneId];
           if (scene) {
             for (const obj of Object.values(scene.objects)) {
               if (obj.growthStages && obj.growthStages.length > 0 && year !== null) {
-                // Find the best matching stage for this year (closest <= year)
                 let bestIdx = 0;
                 for (let i = 0; i < obj.growthStages.length; i++) {
                   if (obj.growthStages[i].year <= year) bestIdx = i;
                 }
                 obj.activeStageIndex = bestIdx;
-                // Restore user-adjusted transform for this stage, or
-                // snapshot current position so the object doesn't jump
+                // Restore per-stage scale + rotation; position stays untouched
                 const stage = obj.growthStages[bestIdx];
-                if (stage.userTransform) {
-                  obj.transform = JSON.parse(JSON.stringify(stage.userTransform));
+                if (stage.userScale) {
+                  obj.transform.scale = { ...stage.userScale };
                 } else {
-                  // First visit to this stage — keep current XZ, apply stage defaults
-                  stage.userTransform = JSON.parse(JSON.stringify(obj.transform));
+                  obj.transform.scale = { x: stage.scale[0], y: stage.scale[1], z: stage.scale[2] };
+                }
+                if (stage.userRotation) {
+                  obj.transform.rotation = { ...stage.userRotation };
                 }
               }
             }
@@ -791,13 +795,15 @@ export const useProjectStore = create<ProjectStore>()(
         if (!obj || !obj.growthStages) return;
         if (stageIndex >= 0 && stageIndex < obj.growthStages.length) {
           obj.activeStageIndex = stageIndex;
-          // Restore user-adjusted transform for this stage, or
-          // snapshot current position so the object doesn't jump
+          // Restore per-stage scale + rotation; position stays untouched
           const stage = obj.growthStages[stageIndex];
-          if (stage.userTransform) {
-            obj.transform = JSON.parse(JSON.stringify(stage.userTransform));
+          if (stage.userScale) {
+            obj.transform.scale = { ...stage.userScale };
           } else {
-            stage.userTransform = JSON.parse(JSON.stringify(obj.transform));
+            obj.transform.scale = { x: stage.scale[0], y: stage.scale[1], z: stage.scale[2] };
+          }
+          if (stage.userRotation) {
+            obj.transform.rotation = { ...stage.userRotation };
           }
         }
       });
