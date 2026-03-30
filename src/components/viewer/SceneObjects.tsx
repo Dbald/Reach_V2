@@ -955,6 +955,7 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
   // --- Default mesh (primitives, with optional growth stage overrides) ---
   const shape = activeStage?.shape || (obj.metadata?.shape as string) || 'box';
+  // Geometry is shifted up by half its height so the origin is at the bottom
   const renderGeometry = () => {
     switch (shape) {
       case 'sphere': return <sphereGeometry args={[0.5, 32, 32]} />;
@@ -963,6 +964,9 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
       default: return <boxGeometry args={[1, 1, 1]} />;
     }
   };
+  // Vertical offset to anchor origin at bottom of geometry
+  // Sphere: radius 0.5, Cylinder: height 1 (center at 0), Box: height 1 (center at 0)
+  const yAnchorOffset = shape === 'plane' ? 0 : 0.5;
 
   const effectiveColor = activeStage?.color || getColor();
 
@@ -972,40 +976,44 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
   return (
     <>
-      <mesh
+      <group
         ref={meshCallback as any}
         position={pos}
         scale={scale}
         rotation={rotation}
-        onClick={handleClick}
-        onPointerDown={handlePointerDown}
-        castShadow
-        receiveShadow
       >
-        {renderGeometry()}
-        {texUrl ? (
-          <TexturedMaterial
-            url={texUrl}
-            color={effectiveColor}
-            isSelected={isSelected}
-            roughness={obj.material?.roughness ?? 0.7}
-            metalness={obj.material?.metalness ?? 0.1}
-            side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
-            wireframe={isWireframe}
-          />
-        ) : (
-          <meshStandardMaterial
-            color={effectiveColor}
-            transparent={isSelected || isGrowthFading.current}
-            opacity={isGrowthFading.current ? growthFade.current : (isSelected ? 0.85 : 1)}
-            roughness={obj.material?.roughness ?? 0.7}
-            metalness={obj.material?.metalness ?? 0.1}
-            side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
-            wireframe={isWireframe}
-          />
-        )}
-        {selectionOutline}
-      </mesh>
+        <mesh
+          position={[0, yAnchorOffset, 0]}
+          onClick={handleClick}
+          onPointerDown={handlePointerDown}
+          castShadow
+          receiveShadow
+        >
+          {renderGeometry()}
+          {texUrl ? (
+            <TexturedMaterial
+              url={texUrl}
+              color={effectiveColor}
+              isSelected={isSelected}
+              roughness={obj.material?.roughness ?? 0.7}
+              metalness={obj.material?.metalness ?? 0.1}
+              side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
+              wireframe={isWireframe}
+            />
+          ) : (
+            <meshStandardMaterial
+              color={effectiveColor}
+              transparent={isSelected || isGrowthFading.current}
+              opacity={isGrowthFading.current ? growthFade.current : (isSelected ? 0.85 : 1)}
+              roughness={obj.material?.roughness ?? 0.7}
+              metalness={obj.material?.metalness ?? 0.1}
+              side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
+              wireframe={isWireframe}
+            />
+          )}
+          {selectionOutline}
+        </mesh>
+      </group>
       {activeStage && (
         <GrowthStageLabel stage={activeStage} position={pos} scaleY={scale[1]} />
       )}

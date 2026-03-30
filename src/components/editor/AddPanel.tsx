@@ -594,7 +594,7 @@ const AssetCatalogPanel: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const id = addObject(activeSceneId, 'mesh', {
       name: item.name,
       transform: {
-        position: { x: 0, y: p.yOffset, z: 0 },
+        position: { x: 0, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0, w: 1 },
         scale: { x: p.scale[0], y: p.scale[1], z: p.scale[2] },
       },
