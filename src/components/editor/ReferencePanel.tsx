@@ -9,42 +9,36 @@ import React, { useState, useRef, useCallback } from 'react';
 import { useProjectStore } from '@/store';
 import type { ReferenceOverlay } from '@/types';
 
-// --- PDF to image conversion (loads pdf.js from CDN at runtime) ---
+// --- PDF to image conversion (loads pdf.js v3 UMD from CDN at runtime) ---
 
-const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168';
+const PDFJS_VERSION = '3.11.174';
+const PDFJS_CDN = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build`;
 let pdfjsLoadPromise: Promise<any> | null = null;
 
 function loadPdfJs(): Promise<any> {
   if (pdfjsLoadPromise) return pdfjsLoadPromise;
   pdfjsLoadPromise = new Promise((resolve, reject) => {
-    // Check if already loaded
     if ((window as any).pdfjsLib) {
       resolve((window as any).pdfjsLib);
       return;
     }
     const script = document.createElement('script');
-    script.src = `${PDFJS_CDN}/pdf.min.mjs`;
-    script.type = 'module';
-    // Module scripts don't expose globals, so use a module import approach instead
-    // Fall back to the UMD build which sets window.pdfjsLib
-    script.remove();
-
-    const umdScript = document.createElement('script');
-    umdScript.src = `${PDFJS_CDN}/pdf.min.js`;
-    umdScript.onload = () => {
+    script.src = `${PDFJS_CDN}/pdf.min.js`;
+    script.onload = () => {
       const lib = (window as any).pdfjsLib;
       if (lib) {
         lib.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.js`;
         resolve(lib);
       } else {
+        pdfjsLoadPromise = null;
         reject(new Error('pdf.js loaded but pdfjsLib not found on window'));
       }
     };
-    umdScript.onerror = () => {
+    script.onerror = () => {
       pdfjsLoadPromise = null;
       reject(new Error('Failed to load pdf.js from CDN'));
     };
-    document.head.appendChild(umdScript);
+    document.head.appendChild(script);
   });
   return pdfjsLoadPromise;
 }
