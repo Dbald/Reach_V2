@@ -3,7 +3,6 @@ import { immer } from 'zustand/middleware/immer';
 import { v4 as uuid } from 'uuid';
 import type {
   Project,
-  Scene,
   SceneObject,
   SceneObjectType,
   Zone,
@@ -13,6 +12,7 @@ import type {
   MaterialConfig,
   ValidationReport,
   GrowthStage,
+  ReferenceOverlay,
 } from '@/types';
 import { createProject, defaultTransform } from '@/utils/defaults';
 
@@ -133,6 +133,11 @@ interface ProjectStore {
   setActiveGrowthYear: (year: number | null) => void;
   setObjectGrowthStages: (sceneId: string, objectId: string, stages: GrowthStage[]) => void;
   setObjectActiveStage: (sceneId: string, objectId: string, stageIndex: number) => void;
+
+  // Reference overlays
+  addReferenceOverlay: (sceneId: string, overlay: Omit<ReferenceOverlay, 'id'>) => string;
+  updateReferenceOverlay: (sceneId: string, overlayId: string, updates: Partial<ReferenceOverlay>) => void;
+  deleteReferenceOverlay: (sceneId: string, overlayId: string) => void;
 
   // Validation
   setValidationReport: (report: ValidationReport | null) => void;
@@ -810,6 +815,38 @@ export const useProjectStore = create<ProjectStore>()(
           if (stage.userRotation) {
             obj.transform.rotation = { ...stage.userRotation };
           }
+        }
+      });
+    },
+
+    // --- Reference overlays ---
+    addReferenceOverlay: (sceneId, overlay) => {
+      const id = uuid();
+      get()._pushUndo();
+      set((state) => {
+        const scene = state.project?.scenes[sceneId];
+        if (!scene) return;
+        if (!scene.referenceOverlays) scene.referenceOverlays = {};
+        scene.referenceOverlays[id] = { ...overlay, id };
+        state.project!.updatedAt = new Date().toISOString();
+      });
+      return id;
+    },
+
+    updateReferenceOverlay: (sceneId, overlayId, updates) => {
+      get()._pushUndo();
+      set((state) => {
+        const overlay = state.project?.scenes[sceneId]?.referenceOverlays?.[overlayId];
+        if (overlay) Object.assign(overlay, updates);
+      });
+    },
+
+    deleteReferenceOverlay: (sceneId, overlayId) => {
+      get()._pushUndo();
+      set((state) => {
+        const scene = state.project?.scenes[sceneId];
+        if (scene?.referenceOverlays) {
+          delete scene.referenceOverlays[overlayId];
         }
       });
     },

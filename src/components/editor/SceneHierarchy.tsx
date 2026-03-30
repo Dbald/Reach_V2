@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useProjectStore } from '@/store';
 import { getHierarchy } from '@/services/sceneGraph';
+import { ReferencePanel } from './ReferencePanel';
 
 export const SceneHierarchy: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -180,6 +181,9 @@ export const SceneHierarchy: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Reference image overlays */}
+      <ReferencePanel />
     </div>
   );
 };

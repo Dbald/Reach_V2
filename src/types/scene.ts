@@ -180,6 +180,45 @@ export interface EnvironmentConfig {
   groundMaterial?: GroundMaterial;
 }
 
+// --- Reference overlays ---
+
+export interface CalibrationPoint {
+  /** 2D position on the image (0-1 normalized UV) */
+  uv: { u: number; v: number };
+  /** 3D world position this point maps to */
+  world: Vector3;
+}
+
+export interface ReferenceOverlay {
+  id: string;
+  name: string;
+  /** Blob URL or data URL of the image (for PDFs, first page rendered to image) */
+  imageUrl: string;
+  /** Original asset ID in the project asset library */
+  assetId?: string;
+  /** Whether original file was a PDF */
+  isPdf?: boolean;
+  /** Position on the ground plane (XZ) */
+  position: { x: number; z: number };
+  /** Rotation in radians around Y axis */
+  rotation: number;
+  /** Width and height in world units */
+  size: { width: number; height: number };
+  /** Opacity 0-1 */
+  opacity: number;
+  /** Prevent accidental moves */
+  locked: boolean;
+  /** Show/hide without deleting */
+  visible: boolean;
+  /** Two-point calibration data */
+  calibration?: {
+    point1: CalibrationPoint;
+    point2: CalibrationPoint;
+    /** Real-world distance between the two points (in project units) */
+    realDistance: number;
+  };
+}
+
 // --- Scene ---
 
 export interface Scene {
@@ -191,6 +230,8 @@ export interface Scene {
   viewpoints: Record<string, Viewpoint>;
   navigationLinks: NavigationLink[];
   interactions: InteractionBlock[];
+  /** Reference images/PDFs placed on the ground plane */
+  referenceOverlays?: Record<string, ReferenceOverlay>;
 }
 
 // --- Publish config ---

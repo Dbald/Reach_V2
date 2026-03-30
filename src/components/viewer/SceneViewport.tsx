@@ -6,6 +6,7 @@ import { useProjectStore } from '@/store';
 import type { RenderMode } from '@/store/projectStore';
 import { SceneObjects } from './SceneObjects';
 import { ZoneVisualizer } from './ZoneVisualizer';
+import { ReferenceOverlays } from './ReferenceOverlays';
 import { FirstPersonControls } from './FirstPersonControls';
 import { ContextMenu } from '@/components/editor/ContextMenu';
 import { GrowthTimeline } from '@/components/editor/GrowthTimeline';
@@ -80,6 +81,9 @@ export const SceneViewport: React.FC = () => {
 
         {/* Ground click: deselect / place / zone */}
         <GroundInteraction />
+
+        {/* Reference image overlays */}
+        <ReferenceOverlays scene={scene} />
 
         {/* Scene objects */}
         <SceneObjects scene={scene} renderMode={renderMode} />

@@ -12,28 +12,29 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@react-three/drei": "^9.92.0",
+    "@react-three/fiber": "^8.15.0",
+    "@react-three/xr": "^5.7.0",
+    "immer": "^10.0.3",
+    "pdfjs-dist": "^4.4.168",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@react-three/fiber": "^8.15.0",
-    "@react-three/drei": "^9.92.0",
-    "@react-three/xr": "^5.7.0",
+    "react-router-dom": "^6.21.0",
     "three": "^0.160.0",
-    "zustand": "^4.4.7",
     "uuid": "^9.0.0",
-    "immer": "^10.0.3",
-    "react-router-dom": "^6.21.0"
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "@types/three": "^0.160.0",
     "@types/uuid": "^9.0.7",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.56.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.10",
-    "vitest": "^1.1.0",
-    "eslint": "^8.56.0",
-    "@typescript-eslint/eslint-plugin": "^6.15.0",
-    "@typescript-eslint/parser": "^6.15.0"
+    "vitest": "^1.1.0"
   }
 }
