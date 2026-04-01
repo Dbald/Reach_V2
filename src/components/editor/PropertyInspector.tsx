@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useProjectStore } from '@/store';
 import type { SceneObject, Vector3, Quaternion, GrowthStage } from '@/types';
 import { detectFormat, createAssetFromFile, processAsset } from '@/services/assetPipeline';
@@ -7,26 +7,17 @@ export const PropertyInspector: React.FC = () => {
   const project = useProjectStore((s) => s.project);
   const activeSceneId = useProjectStore((s) => s.editor.activeSceneId);
   const selectedObjectIds = useProjectStore((s) => s.editor.selectedObjectIds);
-  const showInspector = useProjectStore((s) => s.editor.showInspector);
 
   const selectedObjectId = selectedObjectIds[0] ?? null;
-
-  const hasObject = !!(showInspector && project && activeSceneId && selectedObjectId);
-
-  if (!hasObject) return null;
-
   const scene = project?.scenes[activeSceneId ?? ''];
   const obj = scene?.objects[selectedObjectId ?? ''];
 
-  if (!obj) return null;
-
   return (
-    <div style={{
-      ...styles.panel,
-      width: 260,
-      overflowX: 'hidden',
-      overflowY: 'auto',
-    }}>
+    <div style={styles.panel}>
+      <div style={styles.header}>Properties</div>
+      {!obj && (
+        <div style={styles.emptyHint}>Select an object to view properties</div>
+      )}
       {selectedObjectIds.length > 1 && (
         <div style={{ padding: '8px 12px', borderBottom: '1px solid #1e293b', background: '#1e293b' }}>
           <span style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600 }}>
@@ -34,8 +25,8 @@ export const PropertyInspector: React.FC = () => {
           </span>
         </div>
       )}
-      {obj && (
-        <PropertyContent obj={obj} sceneId={activeSceneId!} />
+      {obj && activeSceneId && (
+        <PropertyContent obj={obj} sceneId={activeSceneId} />
       )}
     </div>
   );
@@ -704,12 +695,20 @@ const RotationInput: React.FC<{
 
 const styles: Record<string, React.CSSProperties> = {
   panel: {
+    flex: 1,
+    minHeight: 0,
     background: '#0f172a',
-    borderLeft: '1px solid #1e293b',
     color: '#e2e8f0',
+    overflowX: 'hidden',
     overflowY: 'auto',
     fontSize: 12,
-    flexShrink: 0,
+  },
+  emptyHint: {
+    padding: '16px 12px',
+    color: '#475569',
+    fontSize: 11,
+    fontStyle: 'italic',
+    textAlign: 'center' as const,
   },
   header: {
     padding: '12px',

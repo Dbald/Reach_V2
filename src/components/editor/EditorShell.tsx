@@ -31,12 +31,15 @@ export const EditorShell: React.FC = () => {
       <Toolbar />
       <AddPanel />
       <div style={styles.body}>
-        <SceneHierarchy />
         <div style={styles.center}>
           <SceneViewport />
           <AssetTray />
         </div>
-        <PropertyInspector />
+        {/* Right panel: Hierarchy on top, Properties below (Blender-style) */}
+        <div style={styles.rightPanel}>
+          <SceneHierarchy />
+          <PropertyInspector />
+        </div>
       </div>
     </div>
   );
@@ -60,6 +63,15 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  rightPanel: {
+    width: 280,
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    background: '#0f172a',
+    borderLeft: '1px solid #1e293b',
     overflow: 'hidden',
   },
   fullscreen: {

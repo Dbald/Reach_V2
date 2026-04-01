@@ -190,13 +190,13 @@ export const SceneHierarchy: React.FC = () => {
 
 const styles: Record<string, React.CSSProperties> = {
   panel: {
-    width: 240,
+    flex: 1,
+    minHeight: 0,
     background: '#0f172a',
-    borderRight: '1px solid #1e293b',
+    borderBottom: '1px solid #1e293b',
     color: '#e2e8f0',
     overflowY: 'auto',
     fontSize: 12,
-    flexShrink: 0,
   },
   header: {
     padding: '12px 12px 4px',
