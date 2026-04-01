@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport, Environment } from '@react-three/drei';
@@ -12,6 +12,18 @@ import { ContextMenu } from '@/components/editor/ContextMenu';
 import { GrowthTimeline } from '@/components/editor/GrowthTimeline';
 import type { Scene } from '@/types';
 import { getGroundMaterial } from '@/config/groundMaterials';
+
+// Shared ref for passing the Three.js camera out of the Canvas for drag-select
+const cameraRef = { current: null as THREE.Camera | null };
+const glRef = { current: null as any };
+
+/** Syncs the R3F camera to the shared ref so DragSelectOverlay can project */
+const CameraSync: React.FC = () => {
+  const { camera, gl } = useThree();
+  cameraRef.current = camera;
+  glRef.current = gl;
+  return null;
+};
 
 export const SceneViewport: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -45,6 +57,7 @@ export const SceneViewport: React.FC = () => {
         }}
         gl={{ powerPreference: 'high-performance', antialias: true }}
       >
+        <CameraSync />
         {/* Lighting - always present but varies by render mode */}
         {renderMode === 'unlit' ? (
           <ambientLight intensity={2} color="#ffffff" />
@@ -94,7 +107,14 @@ export const SceneViewport: React.FC = () => {
         {/* Camera controls */}
         {viewMode === 'editor' && (
           <>
-            <OrbitControls makeDefault />
+            <OrbitControls
+              makeDefault
+              mouseButtons={{
+                LEFT: undefined as any,    // free left-click for selection
+                MIDDLE: THREE.MOUSE.ROTATE, // orbit with middle mouse
+                RIGHT: THREE.MOUSE.PAN,     // pan with right mouse
+              }}
+            />
             <CameraFocus scene={scene} />
             <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
               <GizmoViewport labelColor="white" axisHeadScale={1} />
@@ -122,6 +142,7 @@ export const SceneViewport: React.FC = () => {
       {/* Canvas overlays */}
       {viewMode === 'editor' && <CanvasToolbar />}
       {viewMode === 'editor' && <RenderModeSelector />}
+      {viewMode === 'editor' && <DragSelectOverlay scene={scene} />}
       <GrowthTimeline />
 
       {/* View mode indicator */}
@@ -232,6 +253,7 @@ const CanvasToolbar: React.FC = () => {
   const selectedObjectIds = useProjectStore((s) => s.editor.selectedObjectIds);
 
   const tools = [
+    { id: 'select' as const, label: 'Select', icon: '\u25E2', shortcut: 'Q' },
     { id: 'move' as const, label: 'Move', icon: '\u2725', shortcut: 'G' },
     { id: 'rotate' as const, label: 'Rotate', icon: '\u21BB', shortcut: 'R' },
     { id: 'scale' as const, label: 'Scale', icon: '\u2922', shortcut: 'S' },
@@ -532,6 +554,122 @@ const GroundPlane: React.FC<{ env: Scene['environment']; renderMode: RenderMode 
         wireframe={renderMode === 'wireframe'}
       />
     </mesh>
+  );
+};
+
+/** Left-click drag to box-select objects */
+const DragSelectOverlay: React.FC<{ scene: Scene }> = ({ scene }) => {
+  const selectObject = useProjectStore((s) => s.selectObject);
+  const activeTool = useProjectStore((s) => s.editor.activeTool);
+  const [dragging, setDragging] = useState(false);
+  const [start, setStart] = useState({ x: 0, y: 0 });
+  const [end, setEnd] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only left-click, only when select tool or no transform tool active on empty space
+    if (e.button !== 0) return;
+    // Don't interfere if clicking on UI overlays
+    if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    setEnd({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    setDragging(true);
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragging) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setEnd({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, [dragging]);
+
+  const handleMouseUp = useCallback(() => {
+    if (!dragging) return;
+    setDragging(false);
+
+    const camera = cameraRef.current;
+    const gl = glRef.current;
+    if (!camera || !gl) return;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // Compute normalized box
+    const minX = Math.min(start.x, end.x);
+    const maxX = Math.max(start.x, end.x);
+    const minY = Math.min(start.y, end.y);
+    const maxY = Math.max(start.y, end.y);
+
+    const boxWidth = maxX - minX;
+    const boxHeight = maxY - minY;
+
+    // If it's a tiny drag (click), deselect all
+    if (boxWidth < 5 && boxHeight < 5) {
+      selectObject(null);
+      return;
+    }
+
+    // Project each object position to screen and check if inside box
+    const objects = Object.values(scene.objects);
+    const selected: string[] = [];
+    const vec = new THREE.Vector3();
+
+    for (const obj of objects) {
+      if (!obj.visible) continue;
+      vec.set(obj.transform.position.x, obj.transform.position.y, obj.transform.position.z);
+      vec.project(camera);
+
+      // Convert from NDC (-1..1) to pixel coords
+      const sx = (vec.x * 0.5 + 0.5) * rect.width;
+      const sy = (-vec.y * 0.5 + 0.5) * rect.height;
+
+      if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY && vec.z < 1) {
+        selected.push(obj.id);
+      }
+    }
+
+    // Select all found objects
+    if (selected.length > 0) {
+      selectObject(selected[0]);
+      for (let i = 1; i < selected.length; i++) {
+        selectObject(selected[i], true);
+      }
+    } else {
+      selectObject(null);
+    }
+  }, [dragging, start, end, scene, selectObject]);
+
+  // Compute box rect for display
+  const boxStyle: React.CSSProperties | null = dragging ? {
+    position: 'absolute',
+    left: Math.min(start.x, end.x),
+    top: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y),
+    border: '1px solid #3b82f6',
+    background: 'rgba(59, 130, 246, 0.1)',
+    pointerEvents: 'none',
+    zIndex: 50,
+  } : null;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: dragging ? 49 : -1,
+        cursor: activeTool === 'select' ? 'crosshair' : 'default',
+        pointerEvents: activeTool === 'select' ? 'auto' : 'none',
+      }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+    >
+      {boxStyle && <div style={boxStyle} />}
+    </div>
   );
 };
 

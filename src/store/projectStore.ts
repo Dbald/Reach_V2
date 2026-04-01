@@ -91,6 +91,8 @@ interface ProjectStore {
   setObjectTransformLive: (sceneId: string, objectId: string, transform: Transform) => void;
   setObjectMaterial: (sceneId: string, objectId: string, material: MaterialConfig) => void;
   setActiveCamera: (sceneId: string, cameraObjectId: string) => void;
+  groupObjects: (sceneId: string, objectIds: string[]) => string | null;
+  ungroupObject: (sceneId: string, groupId: string) => void;
 
   // Zone actions
   addZone: (sceneId: string, zone: Omit<Zone, 'id'>) => string;
@@ -442,6 +444,94 @@ export const useProjectStore = create<ProjectStore>()(
             obj.metadata.isEntry = obj.id === cameraObjectId;
           }
         }
+        state.project!.updatedAt = new Date().toISOString();
+      });
+    },
+
+    groupObjects: (sceneId, objectIds) => {
+      if (objectIds.length < 2) return null;
+      const groupId = uuid();
+      get()._pushUndo();
+      set((state) => {
+        const scene = state.project?.scenes[sceneId];
+        if (!scene) return;
+        // Compute center of all objects to place group there
+        let cx = 0, cy = 0, cz = 0;
+        const valid: string[] = [];
+        for (const id of objectIds) {
+          const obj = scene.objects[id];
+          if (obj) {
+            cx += obj.transform.position.x;
+            cy += obj.transform.position.y;
+            cz += obj.transform.position.z;
+            valid.push(id);
+          }
+        }
+        if (valid.length < 2) return;
+        cx /= valid.length;
+        cy /= valid.length;
+        cz /= valid.length;
+
+        // Create group object at the center
+        const group: SceneObject = {
+          id: groupId,
+          name: `Group`,
+          type: 'group',
+          parentId: null,
+          transform: {
+            position: { x: cx, y: cy, z: cz },
+            rotation: { x: 0, y: 0, z: 0, w: 1 },
+            scale: { x: 1, y: 1, z: 1 },
+          },
+          tags: [],
+          metadata: {},
+          visible: true,
+          locked: false,
+        };
+        scene.objects[groupId] = group;
+
+        // Reparent children and offset their positions relative to group center
+        for (const id of valid) {
+          const obj = scene.objects[id];
+          if (!obj) continue;
+          obj.parentId = groupId;
+          obj.transform.position.x -= cx;
+          obj.transform.position.y -= cy;
+          obj.transform.position.z -= cz;
+        }
+        state.editor.selectedObjectIds = [groupId];
+        state.project!.updatedAt = new Date().toISOString();
+      });
+      return groupId;
+    },
+
+    ungroupObject: (sceneId, groupId) => {
+      get()._pushUndo();
+      set((state) => {
+        const scene = state.project?.scenes[sceneId];
+        if (!scene) return;
+        const group = scene.objects[groupId];
+        if (!group || group.type !== 'group') return;
+
+        const gx = group.transform.position.x;
+        const gy = group.transform.position.y;
+        const gz = group.transform.position.z;
+
+        // Move children back to world space
+        const childIds: string[] = [];
+        for (const obj of Object.values(scene.objects)) {
+          if (obj.parentId === groupId) {
+            obj.parentId = group.parentId; // preserve nesting if group was inside another group
+            obj.transform.position.x += gx;
+            obj.transform.position.y += gy;
+            obj.transform.position.z += gz;
+            childIds.push(obj.id);
+          }
+        }
+
+        // Delete the group object
+        delete scene.objects[groupId];
+        state.editor.selectedObjectIds = childIds;
         state.project!.updatedAt = new Date().toISOString();
       });
     },

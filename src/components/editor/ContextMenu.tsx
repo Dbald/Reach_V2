@@ -14,6 +14,8 @@ export const ContextMenu: React.FC = () => {
   const updateObject = useProjectStore((s) => s.updateObject);
   const selectObject = useProjectStore((s) => s.selectObject);
   const focusOnSelected = useProjectStore((s) => s.focusOnSelected);
+  const groupObjects = useProjectStore((s) => s.groupObjects);
+  const ungroupObject = useProjectStore((s) => s.ungroupObject);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
@@ -49,6 +51,7 @@ export const ContextMenu: React.FC = () => {
 
   if (isMulti) {
     actions.push(
+      { label: 'Group Selected', icon: '\u{1F4C1}', action: () => { groupObjects(activeSceneId, selectedObjectIds); closeContextMenu(); } },
       { label: `Duplicate ${selectedObjectIds.length} Objects`, icon: '\u2398', action: () => { duplicateSelected(activeSceneId); closeContextMenu(); } },
       { label: `Delete ${selectedObjectIds.length} Objects`, icon: '\u2716', action: () => { deleteSelected(activeSceneId); closeContextMenu(); }, danger: true },
     );
@@ -56,6 +59,14 @@ export const ContextMenu: React.FC = () => {
     actions.push(
       { label: 'Focus', icon: '\u25CE', action: () => { selectObject(obj.id); focusOnSelected(); closeContextMenu(); } },
       { label: 'Duplicate', icon: '\u2398', action: () => { duplicateObject(activeSceneId, obj.id); closeContextMenu(); } },
+    );
+    // Ungroup option for group objects
+    if (obj.type === 'group') {
+      actions.push(
+        { label: 'Ungroup', icon: '\u{1F4C2}', action: () => { ungroupObject(activeSceneId, obj.id); closeContextMenu(); } },
+      );
+    }
+    actions.push(
       { label: obj.visible ? 'Hide' : 'Show', icon: obj.visible ? '\u25C9' : '\u25CB', action: () => { updateObject(activeSceneId, obj.id, { visible: !obj.visible }); closeContextMenu(); } },
       { label: obj.locked ? 'Unlock' : 'Lock', icon: obj.locked ? '\u{1F513}' : '\u{1F512}', action: () => { updateObject(activeSceneId, obj.id, { locked: !obj.locked }); closeContextMenu(); } },
       { label: 'Delete', icon: '\u2716', action: () => { deleteObject(activeSceneId, obj.id); closeContextMenu(); }, danger: true, separator: true },
