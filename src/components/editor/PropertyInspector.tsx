@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useProjectStore } from '@/store';
 import type { SceneObject, Vector3, Quaternion, GrowthStage } from '@/types';
 import { detectFormat, createAssetFromFile, processAsset } from '@/services/assetPipeline';
@@ -11,46 +11,21 @@ export const PropertyInspector: React.FC = () => {
 
   const selectedObjectId = selectedObjectIds[0] ?? null;
 
-  // Track visibility for smooth transition
-  const [visible, setVisible] = useState(false);
-
   const hasObject = !!(showInspector && project && activeSceneId && selectedObjectId);
 
-  useEffect(() => {
-    if (hasObject) {
-      const t = requestAnimationFrame(() => setVisible(true));
-      return () => cancelAnimationFrame(t);
-    } else {
-      setVisible(false);
-    }
-  }, [hasObject]);
-
-  // Keep rendering during close animation
-  const [renderObj, setRenderObj] = useState(false);
-  useEffect(() => {
-    if (hasObject) {
-      setRenderObj(true);
-    } else {
-      const t = setTimeout(() => setRenderObj(false), 250);
-      return () => clearTimeout(t);
-    }
-  }, [hasObject]);
-
-  if (!renderObj && !hasObject) return null;
+  if (!hasObject) return null;
 
   const scene = project?.scenes[activeSceneId ?? ''];
   const obj = scene?.objects[selectedObjectId ?? ''];
 
-  if (!obj && !renderObj) return null;
+  if (!obj) return null;
 
   return (
     <div style={{
       ...styles.panel,
-      width: visible ? 260 : 0,
-      opacity: visible ? 1 : 0,
+      width: 260,
       overflowX: 'hidden',
-      overflowY: visible ? 'auto' : 'hidden',
-      transition: 'width 0.2s ease, opacity 0.2s ease',
+      overflowY: 'auto',
     }}>
       {selectedObjectIds.length > 1 && (
         <div style={{ padding: '8px 12px', borderBottom: '1px solid #1e293b', background: '#1e293b' }}>

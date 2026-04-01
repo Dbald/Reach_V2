@@ -77,7 +77,7 @@ export const GrowthTimeline: React.FC = () => {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     position: 'absolute',
-    bottom: 16,
+    top: 40,
     left: '50%',
     transform: 'translateX(-50%)',
     zIndex: 100,
