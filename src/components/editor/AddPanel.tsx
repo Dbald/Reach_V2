@@ -862,10 +862,9 @@ function hexToColor(hex: string) {
 const styles: Record<string, React.CSSProperties> = {
   panel: {
     position: 'absolute',
-    top: 56,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: 360,
+    top: 36,
+    right: 8,
+    width: 240,
     background: '#0f172a',
     border: '1px solid #1e293b',
     borderRadius: 10,
@@ -877,10 +876,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   panelDocked: {
     position: 'absolute',
-    top: 56,
+    top: 36,
     right: 8,
     width: 240,
-    maxHeight: 'calc(100vh - 120px)',
+    maxHeight: 'calc(100% - 48px)',
     overflowY: 'auto',
     background: '#0f172a',
     border: '1px solid #1e293b',
