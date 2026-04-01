@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid, GizmoHelper, GizmoViewport, Environment } from '@react-three/drei';
+import { OrbitControls, Grid, Environment } from '@react-three/drei';
 import { useProjectStore } from '@/store';
 import type { RenderMode } from '@/store/projectStore';
 import { SceneObjects } from './SceneObjects';
@@ -117,9 +117,7 @@ export const SceneViewport: React.FC = () => {
               }}
             />
             <CameraFocus scene={scene} />
-            <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-              <GizmoViewport labelColor="white" axisHeadScale={1} />
-            </GizmoHelper>
+            <AxisGizmo />
           </>
         )}
         {viewMode === 'preview' && <FirstPersonControls scene={scene} />}
@@ -244,6 +242,161 @@ const CameraFocus: React.FC<{ scene: Scene }> = ({ scene }) => {
       clearFocusTarget();
     }
   });
+
+  return null;
+};
+
+/** Custom axis gizmo that snaps camera to perfectly flat orthographic-style views.
+ *  Renders in a separate scene/camera via createPortal to stay in the corner,
+ *  and on axis click, sets the main camera exactly along that axis. */
+const AxisGizmo: React.FC = () => {
+  const { camera, controls, size, gl } = useThree();
+  const gizmoScene = useRef(new THREE.Scene());
+  const gizmoCam = useRef(new THREE.OrthographicCamera(-1.8, 1.8, 1.8, -1.8, 0.1, 100));
+  const raycaster = useRef(new THREE.Raycaster());
+  const pointer = useRef(new THREE.Vector2());
+  const axisMeshes = useRef<THREE.Mesh[]>([]);
+
+  // Gizmo corner size in pixels
+  const gizmoSize = 120;
+  const margin = 10;
+
+  // Build gizmo scene once
+  useEffect(() => {
+    const scene = gizmoScene.current;
+    // Clear old children
+    while (scene.children.length > 0) scene.remove(scene.children[0]);
+    axisMeshes.current = [];
+
+    const lineLen = 1.0;
+    const headRadius = 0.18;
+
+    // Axis lines + heads
+    const lineDefs = [
+      { dir: [1, 0, 0], color: '#ef4444' },
+      { dir: [0, 1, 0], color: '#22c55e' },
+      { dir: [0, 0, 1], color: '#3b82f6' },
+    ];
+    for (const { dir, color } of lineDefs) {
+      // Line
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(dir[0] * lineLen, dir[1] * lineLen, dir[2] * lineLen),
+      ]);
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
+      scene.add(line);
+
+      // Negative line (dimmer)
+      const geoNeg = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(-dir[0] * lineLen * 0.5, -dir[1] * lineLen * 0.5, -dir[2] * lineLen * 0.5),
+      ]);
+      const lineNeg = new THREE.Line(geoNeg, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.4 }));
+      scene.add(lineNeg);
+
+      // Positive head (clickable sphere)
+      const headGeo = new THREE.SphereGeometry(headRadius, 12, 12);
+      const headMat = new THREE.MeshBasicMaterial({ color });
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.set(dir[0] * lineLen, dir[1] * lineLen, dir[2] * lineLen);
+      head.userData = { axis: dir, positive: true };
+      scene.add(head);
+      axisMeshes.current.push(head);
+
+      // Negative head (smaller, dimmer)
+      const negGeo = new THREE.SphereGeometry(headRadius * 0.65, 12, 12);
+      const negMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 });
+      const negHead = new THREE.Mesh(negGeo, negMat);
+      negHead.position.set(-dir[0] * lineLen * 0.5, -dir[1] * lineLen * 0.5, -dir[2] * lineLen * 0.5);
+      negHead.userData = { axis: dir.map((v: number) => -v), positive: false };
+      scene.add(negHead);
+      axisMeshes.current.push(negHead);
+    }
+
+    // Center sphere
+    const centerGeo = new THREE.SphereGeometry(0.12, 12, 12);
+    const centerMat = new THREE.MeshBasicMaterial({ color: '#94a3b8' });
+    const center = new THREE.Mesh(centerGeo, centerMat);
+    scene.add(center);
+
+    // Ambient light for gizmo
+    scene.add(new THREE.AmbientLight('#ffffff', 2));
+
+    gizmoCam.current.position.set(0, 0, 5);
+    gizmoCam.current.lookAt(0, 0, 0);
+  }, []);
+
+  // Render gizmo in a corner, matching main camera rotation
+  useFrame(() => {
+    const cam = gizmoCam.current;
+    // Mirror main camera's rotation so gizmo shows same orientation
+    cam.quaternion.copy(camera.quaternion);
+    cam.position.set(0, 0, 5).applyQuaternion(camera.quaternion);
+    cam.lookAt(0, 0, 0);
+
+    // Render in bottom-right corner (WebGL viewport Y is from bottom)
+    const gizX = size.width - gizmoSize - margin;
+    gl.setViewport(gizX, margin, gizmoSize, gizmoSize);
+    gl.setScissor(gizX, margin, gizmoSize, gizmoSize);
+    gl.setScissorTest(true);
+    gl.clearDepth();
+    gl.render(gizmoScene.current, cam);
+    gl.setScissorTest(false);
+    gl.setViewport(0, 0, size.width, size.height);
+  }, 2); // render priority after main scene
+
+  // Handle click on gizmo
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const canvas = gl.domElement;
+      const rect = canvas.getBoundingClientRect();
+
+      // Check if click is within gizmo area (bottom-right corner)
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const gx = rect.width - gizmoSize - margin;
+      const gy = rect.height - gizmoSize - margin;
+
+      if (px < gx || px > gx + gizmoSize || py < gy || py > gy + gizmoSize) return;
+
+      // Convert click to NDC within gizmo viewport
+      const localX = ((px - gx) / gizmoSize) * 2 - 1;
+      const localY = -((py - gy) / gizmoSize) * 2 + 1;
+      pointer.current.set(localX, localY);
+
+      raycaster.current.setFromCamera(pointer.current, gizmoCam.current);
+      const hits = raycaster.current.intersectObjects(axisMeshes.current);
+      if (hits.length === 0) return;
+
+      const hit = hits[0].object;
+      const axisData = hit.userData.axis;
+      if (!axisData) return;
+
+      // Snap camera exactly along this axis
+      const orbitControls = controls as any;
+      const target = orbitControls?.target?.clone() ?? new THREE.Vector3();
+      const dist = camera.position.distanceTo(target);
+
+      let dir: THREE.Vector3;
+      if (Array.isArray(axisData)) {
+        dir = new THREE.Vector3(axisData[0], axisData[1], axisData[2]);
+      } else {
+        dir = axisData.clone();
+      }
+
+      // Camera position = target + direction * distance
+      const newPos = target.clone().add(dir.clone().multiplyScalar(dist));
+      camera.position.copy(newPos);
+      camera.lookAt(target);
+
+      if (orbitControls) {
+        orbitControls.update();
+      }
+    };
+
+    gl.domElement.addEventListener('click', handleClick);
+    return () => gl.domElement.removeEventListener('click', handleClick);
+  }, [camera, controls, gl, size]);
 
   return null;
 };
