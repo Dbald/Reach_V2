@@ -6,6 +6,7 @@
 
 import type { Project, PublishConfig, ValidationReport } from '@/types';
 import { validateScene, hasBlockers, getReadinessBand } from './validation';
+import { encodeSceneToHash } from '@/components/viewer/SceneViewer';
 
 export interface PublishResult {
   success: boolean;
@@ -60,28 +61,20 @@ export async function publishProject(project: Project): Promise<PublishResult> {
     };
   }
 
-  // Step 2: Package (simulated)
-  await simulatePackaging();
+  // Step 2: Package — encode scene data into shareable URL
+  const scene = Object.values(project.scenes)[0];
+  if (!scene) {
+    return { success: false, report, error: 'No scene found to publish.' };
+  }
 
-  // Step 3: Deploy (simulated)
-  const shareUrl = await simulateDeploy(project.id);
+  const baseUrl = `${window.location.origin}${window.location.pathname}`;
+  const shareUrl = encodeSceneToHash(scene, baseUrl);
 
   return {
     success: true,
     shareUrl,
     report,
   };
-}
-
-async function simulatePackaging(): Promise<void> {
-  // In production: compile scene config + runtime dependencies into publishable bundle
-  await new Promise((resolve) => setTimeout(resolve, 300));
-}
-
-async function simulateDeploy(_projectId: string): Promise<string> {
-  // Deploy is handled by GitHub Actions → GitHub Pages
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  return 'https://Dbald.github.io/Reach_V2/';
 }
 
 /** Get a summary of the publish config state */

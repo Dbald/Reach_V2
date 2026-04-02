@@ -11,6 +11,7 @@ export const PublishPanel: React.FC = () => {
   const setValidationReport = useProjectStore((s) => s.setValidationReport);
   const [publishing, setPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<{ success: boolean; url?: string; error?: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleValidate = useCallback(() => {
     if (!project || !activeSceneId) return;
@@ -112,9 +113,21 @@ export const PublishPanel: React.FC = () => {
               <>
                 <span style={{ color: '#22c55e', fontWeight: 600 }}>Published successfully!</span>
                 {publishResult.url && (
-                  <a href={publishResult.url} target="_blank" rel="noopener noreferrer" style={styles.url}>
-                    {publishResult.url}
-                  </a>
+                  <div style={{ marginTop: 4 }}>
+                    <a href={publishResult.url} target="_blank" rel="noopener noreferrer" style={styles.url}>
+                      Open scene link
+                    </a>
+                    <button
+                      style={styles.copyBtn}
+                      onClick={() => {
+                        navigator.clipboard.writeText(publishResult.url!);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                    >
+                      {copied ? 'Copied!' : 'Copy Link'}
+                    </button>
+                  </div>
                 )}
               </>
             ) : (
@@ -188,14 +201,22 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
   },
   url: {
-    display: 'block',
-    marginTop: 4,
-    padding: '6px 8px',
+    display: 'inline-block',
+    padding: '6px 10px',
     borderRadius: 4,
     background: '#1e293b',
     fontSize: 11,
-    wordBreak: 'break-all',
     color: '#38bdf8',
     textDecoration: 'none',
+    marginRight: 6,
+  },
+  copyBtn: {
+    padding: '6px 10px',
+    borderRadius: 4,
+    border: '1px solid #334155',
+    background: 'transparent',
+    color: '#94a3b8',
+    fontSize: 11,
+    cursor: 'pointer',
   },
 };

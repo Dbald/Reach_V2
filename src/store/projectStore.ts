@@ -174,10 +174,36 @@ const defaultEditorState: EditorState = {
   activeGrowthYear: null,
 };
 
+// --- localStorage persistence helpers ---
+const STORAGE_KEY = 'reach_v2_project';
+
+function loadSavedProject(): Project | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore corrupt data */ }
+  return null;
+}
+
+function saveProject(project: Project | null) {
+  try {
+    if (project) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch { /* storage full or unavailable */ }
+}
+
+const savedProject = loadSavedProject();
+
 export const useProjectStore = create<ProjectStore>()(
   immer((set, get) => ({
-    project: null,
-    editor: defaultEditorState,
+    project: savedProject,
+    editor: {
+      ...defaultEditorState,
+      activeSceneId: savedProject ? Object.keys(savedProject.scenes)[0] : null,
+    },
     validationReport: null,
     _undoStack: [],
     _redoStack: [],
@@ -948,3 +974,8 @@ export const useProjectStore = create<ProjectStore>()(
     },
   }))
 );
+
+// Auto-save project to localStorage on every change
+useProjectStore.subscribe((state) => {
+  saveProject(state.project);
+});
