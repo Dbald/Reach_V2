@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useProjectStore } from '@/store';
+import { saveProjectToList } from '@/store/projectStore';
 import { validateScene, getReadinessBand, hasBlockers } from '@/services/validation';
 import { publishProject } from '@/services/publish';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -23,15 +24,31 @@ export const Toolbar: React.FC = () => {
   const viewMode = useProjectStore((s) => s.editor.viewMode);
   const setViewMode = useProjectStore((s) => s.setViewMode);
   const projectName = useProjectStore((s) => s.project?.name ?? 'Untitled');
+  const project = useProjectStore((s) => s.project);
+  const goHome = useProjectStore((s) => s.goHome);
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
   const focusOnSelected = useProjectStore((s) => s.focusOnSelected);
   const undoAvailable = useProjectStore((s) => s._undoStack.length > 0);
   const redoAvailable = useProjectStore((s) => s._redoStack.length > 0);
   const [showPublish, setShowPublish] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = useCallback(() => {
+    if (project) {
+      saveProjectToList(project);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    }
+  }, [project]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSave();
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) { redo(); } else { undo(); }
@@ -75,13 +92,22 @@ export const Toolbar: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setActiveTool, undo, redo, focusOnSelected]);
+  }, [setActiveTool, undo, redo, focusOnSelected, handleSave]);
 
   return (
     <div style={styles.bar}>
       <div style={styles.left}>
-        <span style={styles.logo}>Reach</span>
+        <button onClick={goHome} style={styles.homeBtn} title="Home">
+          <span style={styles.logo}>Reach</span>
+        </button>
         <span style={styles.projectName}>{projectName}</span>
+        <button
+          onClick={handleSave}
+          title="Save (Ctrl+S)"
+          style={styles.saveBtn}
+        >
+          {saved ? 'Saved!' : 'Save'}
+        </button>
       </div>
 
       <div style={styles.center}>
@@ -268,9 +294,24 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
     position: 'relative',
   },
-  left: { display: 'flex', alignItems: 'center', gap: 12 },
+  left: { display: 'flex', alignItems: 'center', gap: 8 },
+  homeBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '4px 0',
+  },
   logo: { fontWeight: 700, fontSize: 16, color: '#3b82f6' },
   projectName: { fontSize: 13, color: '#94a3b8' },
+  saveBtn: {
+    padding: '4px 10px',
+    borderRadius: 4,
+    border: '1px solid #334155',
+    background: 'transparent',
+    color: '#94a3b8',
+    fontSize: 11,
+    cursor: 'pointer',
+  },
   center: { display: 'flex', gap: 2, alignItems: 'center' },
   divider: { width: 1, height: 24, background: '#334155', margin: '0 6px' },
   toolBtnDisabled: { opacity: 0.35, cursor: 'default' },

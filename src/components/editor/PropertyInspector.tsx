@@ -151,6 +151,70 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
 
       {/* Material / Texture - for meshes, video, and other visual objects */}
       {(obj.type === 'mesh' || obj.type === 'video') && (
+        <Section title="Material">
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>Color</label>
+              <input
+                type="color"
+                value={obj.material?.color ? `rgb(${Math.round((obj.material.color.r ?? 1) * 255)},${Math.round((obj.material.color.g ?? 1) * 255)},${Math.round((obj.material.color.b ?? 1) * 255)})` : '#ffffff'}
+                onChange={(e) => {
+                  const hex = e.target.value;
+                  const r = parseInt(hex.slice(1, 3), 16) / 255;
+                  const g = parseInt(hex.slice(3, 5), 16) / 255;
+                  const b = parseInt(hex.slice(5, 7), 16) / 255;
+                  handleMaterial({ color: { r, g, b, a: 1 } });
+                }}
+                style={styles.colorInput}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>Opacity</label>
+              <input
+                type="number"
+                step={0.05}
+                min={0}
+                max={1}
+                value={obj.material?.opacity ?? 1}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  handleMaterial({ opacity: isNaN(v) ? 1 : v, transparent: v < 1 });
+                }}
+                style={styles.numInput}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>Roughness</label>
+              <input
+                type="number"
+                step={0.05}
+                min={0}
+                max={1}
+                value={obj.material?.roughness ?? 0.7}
+                onChange={(e) => handleMaterial({ roughness: parseFloat(e.target.value) || 0 })}
+                style={styles.numInput}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>Metalness</label>
+              <input
+                type="number"
+                step={0.05}
+                min={0}
+                max={1}
+                value={obj.material?.metalness ?? 0.1}
+                onChange={(e) => handleMaterial({ metalness: parseFloat(e.target.value) || 0 })}
+                style={styles.numInput}
+              />
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* Texture */}
+      {(obj.type === 'mesh' || obj.type === 'video') && (
         <Section title="Texture">
           {texAsset ? (
             <div style={styles.textureInfo}>
@@ -174,32 +238,97 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
             />
             {texAsset ? 'Replace Texture' : 'Upload Texture'}
           </label>
-          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>Roughness</label>
-              <input
-                type="number"
-                step={0.1}
-                min={0}
-                max={1}
-                value={obj.material?.roughness ?? 0.7}
-                onChange={(e) => handleMaterial({ roughness: parseFloat(e.target.value) || 0.7 })}
-                style={styles.numInput}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>Metalness</label>
-              <input
-                type="number"
-                step={0.1}
-                min={0}
-                max={1}
-                value={obj.material?.metalness ?? 0.1}
-                onChange={(e) => handleMaterial({ metalness: parseFloat(e.target.value) || 0 })}
-                style={styles.numInput}
-              />
-            </div>
-          </div>
+
+          {/* Texture adjustments — only show when texture is applied */}
+          {texAsset && (
+            <>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Tile X</label>
+                  <input
+                    type="number"
+                    step={0.5}
+                    min={0.1}
+                    value={obj.material?.textureRepeat?.x ?? 1}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value) || 1;
+                      handleMaterial({ textureRepeat: { x: v, y: obj.material?.textureRepeat?.y ?? 1 } });
+                    }}
+                    style={styles.numInput}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Tile Y</label>
+                  <input
+                    type="number"
+                    step={0.5}
+                    min={0.1}
+                    value={obj.material?.textureRepeat?.y ?? 1}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value) || 1;
+                      handleMaterial({ textureRepeat: { x: obj.material?.textureRepeat?.x ?? 1, y: v } });
+                    }}
+                    style={styles.numInput}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Offset X</label>
+                  <input
+                    type="number"
+                    step={0.05}
+                    value={obj.material?.textureOffset?.x ?? 0}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value) || 0;
+                      handleMaterial({ textureOffset: { x: v, y: obj.material?.textureOffset?.y ?? 0 } });
+                    }}
+                    style={styles.numInput}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Offset Y</label>
+                  <input
+                    type="number"
+                    step={0.05}
+                    value={obj.material?.textureOffset?.y ?? 0}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value) || 0;
+                      handleMaterial({ textureOffset: { x: obj.material?.textureOffset?.x ?? 0, y: v } });
+                    }}
+                    style={styles.numInput}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Rotation</label>
+                  <input
+                    type="number"
+                    step={15}
+                    value={Math.round((obj.material?.textureRotation ?? 0) * 180 / Math.PI)}
+                    onChange={(e) => {
+                      const deg = parseFloat(e.target.value) || 0;
+                      handleMaterial({ textureRotation: deg * Math.PI / 180 });
+                    }}
+                    style={styles.numInput}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Brightness</label>
+                  <input
+                    type="number"
+                    step={0.1}
+                    min={0}
+                    max={3}
+                    value={obj.material?.brightness ?? 1}
+                    onChange={(e) => handleMaterial({ brightness: parseFloat(e.target.value) || 1 })}
+                    style={styles.numInput}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </Section>
       )}
 
@@ -653,15 +782,16 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
 const Vec3Input: React.FC<{
   value: Vector3;
   onChange: (axis: keyof Vector3, value: string) => void;
-}> = ({ value, onChange }) => (
+  step?: number;
+}> = ({ value, onChange, step = 0.01 }) => (
   <div style={styles.vec3Row}>
     {(['x', 'y', 'z'] as const).map((axis) => (
       <div key={axis} style={styles.vec3Field}>
         <label style={styles.axisLabel}>{axis.toUpperCase()}</label>
         <input
           type="number"
-          step={0.1}
-          value={value[axis]}
+          step={step}
+          value={Math.round(value[axis] * 1000) / 1000}
           onChange={(e) => onChange(axis, e.target.value)}
           style={styles.numInput}
         />
@@ -674,7 +804,7 @@ const RotationInput: React.FC<{
   rotation: Quaternion;
   onChange: (axis: 'x' | 'y' | 'z', value: string) => void;
 }> = ({ rotation, onChange }) => {
-  const toDeg = (rad: number) => Math.round((rad * 180) / Math.PI * 10) / 10;
+  const toDeg = (rad: number) => Math.round((rad * 180) / Math.PI * 100) / 100;
   return (
     <div style={styles.vec3Row}>
       {(['x', 'y', 'z'] as const).map((axis) => (
@@ -682,7 +812,7 @@ const RotationInput: React.FC<{
           <label style={styles.axisLabel}>{axis.toUpperCase()}</label>
           <input
             type="number"
-            step={5}
+            step={1}
             value={toDeg(rotation[axis])}
             onChange={(e) => onChange(axis, e.target.value)}
             style={styles.numInput}

@@ -92,6 +92,14 @@ export interface MaterialConfig {
   metalness?: number;
   opacity?: number;
   transparent?: boolean;
+  /** Texture tiling repeat (default 1,1) */
+  textureRepeat?: { x: number; y: number };
+  /** Texture offset (0-1 UV shift) */
+  textureOffset?: { x: number; y: number };
+  /** Texture rotation in radians */
+  textureRotation?: number;
+  /** Brightness multiplier (default 1) */
+  brightness?: number;
 }
 
 export interface SceneObject {

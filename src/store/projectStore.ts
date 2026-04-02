@@ -143,6 +143,10 @@ interface ProjectStore {
 
   // Validation
   setValidationReport: (report: ValidationReport | null) => void;
+
+  // Save / Load / Home
+  goHome: () => void;
+  loadProject: (project: Project) => void;
 }
 
 const defaultEditorState: EditorState = {
@@ -176,6 +180,7 @@ const defaultEditorState: EditorState = {
 
 // --- localStorage persistence helpers ---
 const STORAGE_KEY = 'reach_v2_project';
+const SAVED_PROJECTS_KEY = 'reach_v2_saved_projects';
 
 function loadSavedProject(): Project | null {
   try {
@@ -193,6 +198,62 @@ function saveProject(project: Project | null) {
       localStorage.removeItem(STORAGE_KEY);
     }
   } catch { /* storage full or unavailable */ }
+}
+
+export interface SavedProjectEntry {
+  id: string;
+  name: string;
+  templateType: string;
+  updatedAt: string;
+  objectCount: number;
+}
+
+/** Get list of saved project entries (metadata only) */
+export function getSavedProjects(): SavedProjectEntry[] {
+  try {
+    const raw = localStorage.getItem(SAVED_PROJECTS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return [];
+}
+
+/** Save the current project to the saved projects list */
+export function saveProjectToList(project: Project) {
+  try {
+    const entries = getSavedProjects();
+    const scene = Object.values(project.scenes)[0];
+    const entry: SavedProjectEntry = {
+      id: project.id,
+      name: project.name,
+      templateType: project.templateType,
+      updatedAt: new Date().toISOString(),
+      objectCount: scene ? Object.keys(scene.objects).length : 0,
+    };
+    const idx = entries.findIndex((e) => e.id === project.id);
+    if (idx >= 0) entries[idx] = entry;
+    else entries.unshift(entry);
+    localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(entries));
+    // Store full project data under its own key
+    localStorage.setItem(`reach_v2_proj_${project.id}`, JSON.stringify(project));
+  } catch { /* storage full */ }
+}
+
+/** Load a saved project by ID */
+export function loadSavedProjectById(id: string): Project | null {
+  try {
+    const raw = localStorage.getItem(`reach_v2_proj_${id}`);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return null;
+}
+
+/** Delete a saved project by ID */
+export function deleteSavedProject(id: string) {
+  try {
+    localStorage.removeItem(`reach_v2_proj_${id}`);
+    const entries = getSavedProjects().filter((e) => e.id !== id);
+    localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(entries));
+  } catch { /* ignore */ }
 }
 
 const savedProject = loadSavedProject();
@@ -970,6 +1031,29 @@ export const useProjectStore = create<ProjectStore>()(
     setValidationReport: (report) => {
       set((state) => {
         state.validationReport = report;
+      });
+    },
+
+    goHome: () => {
+      set((state) => {
+        state.project = null;
+        state.editor = { ...defaultEditorState };
+        state.validationReport = null;
+        state._undoStack = [];
+        state._redoStack = [];
+      });
+    },
+
+    loadProject: (project) => {
+      set((state) => {
+        state.project = project;
+        state.editor = {
+          ...defaultEditorState,
+          activeSceneId: Object.keys(project.scenes)[0] ?? null,
+        };
+        state.validationReport = null;
+        state._undoStack = [];
+        state._redoStack = [];
       });
     },
   }))

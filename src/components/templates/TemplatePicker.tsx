@@ -1,32 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TEMPLATES, createFromTemplate } from '@/services/templateEngine';
 import { useProjectStore } from '@/store';
+import { getSavedProjects, loadSavedProjectById, deleteSavedProject } from '@/store/projectStore';
 import type { TemplateType } from '@/types';
 
 export const TemplatePicker: React.FC = () => {
   const [projectName, setProjectName] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType | null>(null);
   const createNewProject = useProjectStore((s) => s.createNewProject);
+  const loadProject = useProjectStore((s) => s.loadProject);
   const store = useProjectStore;
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const savedProjects = useMemo(() => getSavedProjects(), [refreshKey]);
 
   const handleCreate = () => {
     if (!selectedTemplate) return;
     const name = projectName.trim() || 'Untitled Project';
-    // Create from template and set in store
     const project = createFromTemplate(name, selectedTemplate);
     const sceneId = Object.keys(project.scenes)[0];
-    // Use the store to initialize
     createNewProject(name, selectedTemplate);
-    // Override with template-populated project data
     store.setState({ project });
     store.getState().setActiveScene(sceneId);
+  };
+
+  const handleLoad = (id: string) => {
+    const project = loadSavedProjectById(id);
+    if (project) loadProject(project);
+  };
+
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteSavedProject(id);
+    setRefreshKey((k) => k + 1);
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.inner}>
-        <h1 style={styles.title}>Start a new project</h1>
-        <p style={styles.subtitle}>Choose a template to get started, or begin with a blank scene.</p>
+        <h1 style={styles.title}>Reach V2</h1>
+        <p style={styles.subtitle}>WebXR Spatial Planning Platform</p>
+
+        {/* Saved Projects */}
+        {savedProjects.length > 0 && (
+          <div style={{ marginBottom: 32, textAlign: 'left' as const }}>
+            <h2 style={styles.sectionHeading}>Saved Projects</h2>
+            <div style={styles.savedGrid}>
+              {savedProjects.map((entry) => (
+                <button
+                  key={entry.id}
+                  onClick={() => handleLoad(entry.id)}
+                  style={styles.savedCard}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={styles.savedName}>{entry.name}</span>
+                    <button
+                      onClick={(e) => handleDelete(entry.id, e)}
+                      style={styles.deleteBtn}
+                      title="Delete"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                  <span style={styles.savedMeta}>
+                    {entry.objectCount} objects &middot; {entry.templateType}
+                  </span>
+                  <span style={styles.savedDate}>
+                    {new Date(entry.updatedAt).toLocaleDateString()} {new Date(entry.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* New Project */}
+        <h2 style={styles.sectionHeading}>New Project</h2>
 
         <input
           type="text"
@@ -78,27 +127,77 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     height: '100%',
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
     background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
     color: '#fff',
+    overflowY: 'auto',
   },
   inner: {
     maxWidth: 800,
     width: '100%',
-    padding: 40,
+    padding: '40px 40px 60px',
     textAlign: 'center',
   },
   title: {
     fontSize: 32,
     fontWeight: 700,
-    margin: '0 0 8px',
+    margin: '0 0 4px',
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 15,
     color: '#94a3b8',
-    margin: '0 0 24px',
+    margin: '0 0 32px',
+  },
+  sectionHeading: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#94a3b8',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1,
+    marginBottom: 12,
+    textAlign: 'left' as const,
+  },
+  savedGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+    gap: 12,
+  },
+  savedCard: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 4,
+    padding: 14,
+    borderRadius: 10,
+    border: '2px solid #334155',
+    background: '#1e293b',
+    color: '#e2e8f0',
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+    fontSize: 13,
+    transition: 'border-color 0.15s',
+  },
+  savedName: {
+    fontWeight: 600,
+    fontSize: 14,
+  },
+  savedMeta: {
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  savedDate: {
+    fontSize: 10,
+    color: '#64748b',
+  },
+  deleteBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#64748b',
+    fontSize: 16,
+    cursor: 'pointer',
+    padding: '0 4px',
+    lineHeight: 1,
   },
   input: {
     width: '100%',

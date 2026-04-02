@@ -1000,6 +1000,11 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
               metalness={obj.material?.metalness ?? 0.1}
               side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
               wireframe={isWireframe}
+              repeat={obj.material?.textureRepeat}
+              offset={obj.material?.textureOffset}
+              texRotation={obj.material?.textureRotation}
+              brightness={obj.material?.brightness}
+              opacity={obj.material?.opacity}
             />
           ) : (
             <meshStandardMaterial
@@ -1064,7 +1069,12 @@ const TexturedMaterial: React.FC<{
   metalness: number;
   side: THREE.Side;
   wireframe: boolean;
-}> = ({ url, color, isSelected, roughness, metalness, side, wireframe }) => {
+  repeat?: { x: number; y: number };
+  offset?: { x: number; y: number };
+  texRotation?: number;
+  brightness?: number;
+  opacity?: number;
+}> = ({ url, color, isSelected, roughness, metalness, side, wireframe, repeat, offset, texRotation, brightness = 1, opacity = 1 }) => {
   const texture = useMemo(() => {
     const loader = new THREE.TextureLoader();
     const tex = loader.load(url);
@@ -1073,17 +1083,34 @@ const TexturedMaterial: React.FC<{
     return tex;
   }, [url]);
 
+  // Apply tiling, offset, rotation
+  useEffect(() => {
+    texture.repeat.set(repeat?.x ?? 1, repeat?.y ?? 1);
+    texture.offset.set(offset?.x ?? 0, offset?.y ?? 0);
+    texture.rotation = texRotation ?? 0;
+    texture.needsUpdate = true;
+  }, [texture, repeat?.x, repeat?.y, offset?.x, offset?.y, texRotation]);
+
   // Dispose texture on unmount or URL change
   useEffect(() => {
     return () => { texture.dispose(); };
   }, [texture]);
 
+  // Brightness as a tint: multiply base color by brightness factor
+  const tintedColor = useMemo(() => {
+    const c = new THREE.Color(color);
+    c.multiplyScalar(brightness);
+    return c;
+  }, [color, brightness]);
+
+  const effectiveOpacity = isSelected ? 0.85 : opacity;
+
   return (
     <meshStandardMaterial
       map={texture}
-      color={color}
-      transparent={isSelected}
-      opacity={isSelected ? 0.85 : 1}
+      color={tintedColor}
+      transparent={isSelected || opacity < 1}
+      opacity={effectiveOpacity}
       roughness={roughness}
       metalness={metalness}
       side={side}
