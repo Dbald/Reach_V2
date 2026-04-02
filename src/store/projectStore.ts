@@ -185,7 +185,18 @@ const SAVED_PROJECTS_KEY = 'reach_v2_saved_projects';
 function loadSavedProject(): Project | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const project = JSON.parse(raw) as Project;
+      // Clean up any corrupted assets (e.g. null format from unsupported uploads)
+      if (project.assets) {
+        for (const [id, asset] of Object.entries(project.assets)) {
+          if (!asset.format) {
+            delete project.assets[id];
+          }
+        }
+      }
+      return project;
+    }
   } catch { /* ignore corrupt data */ }
   return null;
 }

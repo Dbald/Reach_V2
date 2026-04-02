@@ -26,11 +26,7 @@ export const AssetTray: React.FC = () => {
       for (const file of Array.from(files)) {
         const format = detectFormat(file.name);
         if (!format) {
-          const errors = validateFile(file);
-          const errorAsset = createAssetFromFile(file);
-          errorAsset.validationErrors = errors;
-          errorAsset.status = 'error';
-          addAsset(errorAsset);
+          // Unsupported format — skip, don't create a broken asset
           continue;
         }
 
@@ -94,7 +90,7 @@ export const AssetTray: React.FC = () => {
             <div style={styles.assetInfo}>
               <span style={styles.assetName}>{asset.name}</span>
               <span style={styles.assetMeta}>
-                {asset.format.toUpperCase()} - {(asset.fileSizeBytes / 1024 / 1024).toFixed(1)}MB
+                {(asset.format || 'unknown').toUpperCase()} - {(asset.fileSizeBytes / 1024 / 1024).toFixed(1)}MB
               </span>
               <StatusBadge label={asset.status} type="status" value={asset.status} />
             </div>
