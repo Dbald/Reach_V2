@@ -648,45 +648,47 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     const lightDistance = 10;
 
     return (
-      <group position={pos}>
-        {/* Actual light */}
-        {lightType === 'spot' ? (
-          <spotLight intensity={lightIntensity} distance={lightDistance} color={lightColor} angle={0.5} penumbra={0.5} castShadow />
-        ) : lightType === 'directional' ? (
-          <directionalLight intensity={lightIntensity} color={lightColor} castShadow />
-        ) : (
-          <pointLight intensity={lightIntensity} distance={lightDistance} color={lightColor} castShadow />
-        )}
+      <>
+        <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation}>
+          {/* Actual light */}
+          {lightType === 'spot' ? (
+            <spotLight intensity={lightIntensity} distance={lightDistance} color={lightColor} angle={0.5} penumbra={0.5} castShadow />
+          ) : lightType === 'directional' ? (
+            <directionalLight intensity={lightIntensity} color={lightColor} castShadow />
+          ) : (
+            <pointLight intensity={lightIntensity} distance={lightDistance} color={lightColor} castShadow />
+          )}
 
-        {/* Visual indicator sphere */}
-        <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
-          <sphereGeometry args={[0.2, 16, 16]} />
-          <meshBasicMaterial color={lightColor} wireframe={isWireframe} />
-        </mesh>
-
-        {/* Light radius ring (visible feedback) */}
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[lightDistance * 0.3, lightDistance * 0.32, 32]} />
-          <meshBasicMaterial color={lightColor} transparent opacity={0.2} side={2} />
-        </mesh>
-
-        {/* Light direction line for spot/directional */}
-        {(lightType === 'spot' || lightType === 'directional') && (
-          <mesh position={[0, -1, 0]}>
-            <cylinderGeometry args={[0.02, 0.02, 2, 8]} />
-            <meshBasicMaterial color={lightColor} transparent opacity={0.4} />
+          {/* Visual indicator sphere */}
+          <mesh onClick={handleClick} onPointerDown={handlePointerDown}>
+            <sphereGeometry args={[0.2, 16, 16]} />
+            <meshBasicMaterial color={lightColor} wireframe={isWireframe} />
           </mesh>
-        )}
 
-        {isSelected && (
-          <Html center style={{ pointerEvents: 'none' }}>
-            <div style={labelStyle(lightColor)}>
-              {obj.name} ({lightType}, {lightIntensity.toFixed(1)})
-            </div>
-          </Html>
-        )}
+          {/* Light radius ring (visible feedback) */}
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[lightDistance * 0.3, lightDistance * 0.32, 32]} />
+            <meshBasicMaterial color={lightColor} transparent opacity={0.2} side={2} />
+          </mesh>
+
+          {/* Light direction line for spot/directional */}
+          {(lightType === 'spot' || lightType === 'directional') && (
+            <mesh position={[0, -1, 0]}>
+              <cylinderGeometry args={[0.02, 0.02, 2, 8]} />
+              <meshBasicMaterial color={lightColor} transparent opacity={0.4} />
+            </mesh>
+          )}
+
+          {isSelected && (
+            <Html center style={{ pointerEvents: 'none' }}>
+              <div style={labelStyle(lightColor)}>
+                {obj.name} ({lightType}, {lightIntensity.toFixed(1)})
+              </div>
+            </Html>
+          )}
+        </group>
         {gizmoElement}
-      </group>
+      </>
     );
   }
 
@@ -728,9 +730,9 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
 
     return (
       <>
-        <group position={pos} rotation={rotation}>
+        <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation}>
           {/* Camera body */}
-          <mesh ref={meshCallback as any} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
+          <mesh onClick={handleClick} onPointerDown={handlePointerDown}>
             <coneGeometry args={[0.2, 0.4, 4]} />
             <meshStandardMaterial color={camColor} roughness={0.5} wireframe={isWireframe} />
           </mesh>
@@ -777,9 +779,8 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     const textSize = (obj.metadata?.fontSize as number) || 0.4;
     return (
       <>
-        <group position={pos} rotation={rotation}>
+        <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation}>
           <DreiText
-            ref={meshCallback as any}
             fontSize={textSize}
             color="#e2e8f0"
             anchorX="center"
@@ -825,8 +826,8 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
   if (obj.type === 'audio') {
     return (
       <>
-        <group position={pos}>
-          <mesh ref={meshCallback as any} scale={[0.25, 0.25, 0.25]} onClick={handleClick} onPointerDown={handlePointerDown}>
+        <group ref={meshCallback as any} position={pos} scale={scale} rotation={rotation}>
+          <mesh scale={[0.25, 0.25, 0.25]} onClick={handleClick} onPointerDown={handlePointerDown}>
             <sphereGeometry args={[1, 16, 16]} />
             <meshStandardMaterial color="#f97316" roughness={0.4} wireframe={isWireframe} />
           </mesh>
