@@ -78,10 +78,10 @@ async function simulatePackaging(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
-async function simulateDeploy(projectId: string): Promise<string> {
-  // In production: push bundle to hosting layer and create share URL
+async function simulateDeploy(_projectId: string): Promise<string> {
+  // Deploy is handled by GitHub Actions → GitHub Pages
   await new Promise((resolve) => setTimeout(resolve, 200));
-  return `https://reach.app/view/${projectId}`;
+  return 'https://Dbald.github.io/Reach_V2/';
 }
 
 /** Get a summary of the publish config state */

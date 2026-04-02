@@ -3,7 +3,6 @@ import { useProjectStore } from '@/store';
 import { validateScene, getReadinessBand, hasBlockers } from '@/services/validation';
 import { publishProject } from '@/services/publish';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import type { ValidationReport } from '@/types';
 
 export const PublishPanel: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -113,7 +112,9 @@ export const PublishPanel: React.FC = () => {
               <>
                 <span style={{ color: '#22c55e', fontWeight: 600 }}>Published successfully!</span>
                 {publishResult.url && (
-                  <div style={styles.url}>{publishResult.url}</div>
+                  <a href={publishResult.url} target="_blank" rel="noopener noreferrer" style={styles.url}>
+                    {publishResult.url}
+                  </a>
                 )}
               </>
             ) : (
@@ -187,11 +188,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
   },
   url: {
+    display: 'block',
     marginTop: 4,
     padding: '6px 8px',
     borderRadius: 4,
     background: '#1e293b',
     fontSize: 11,
     wordBreak: 'break-all',
+    color: '#38bdf8',
+    textDecoration: 'none',
   },
 };
