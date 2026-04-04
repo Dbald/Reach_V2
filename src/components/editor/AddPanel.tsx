@@ -5,7 +5,7 @@ import type { EnvironmentConfig, GroundMaterial } from '@/types';
 import { GROUND_MATERIALS } from '@/config/groundMaterials';
 import { CATALOG_CATEGORIES, getCatalogByCategory } from '@/config/assetCatalog';
 import type { AssetCategory, CatalogItem } from '@/config/assetCatalog';
-import { searchSketchfab, SKETCHFAB_SUGGESTIONS } from '@/services/sketchfab';
+import { searchSketchfab, downloadSketchfabModel, getSketchfabToken, setSketchfabToken, SKETCHFAB_SUGGESTIONS } from '@/services/sketchfab';
 import type { SketchfabModel } from '@/services/sketchfab';
 
 const categories: { id: PlacementType; label: string; desc: string; icon: string }[] = [
@@ -581,12 +581,17 @@ const AssetCatalogPanel: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const addObject = useProjectStore((s) => s.addObject);
   const selectObject = useProjectStore((s) => s.selectObject);
 
+  const addAsset = useProjectStore((s) => s.addAsset);
+
   const [activeCategory, setActiveCategory] = useState<AssetCategory | null>(null);
   const [tab, setTab] = useState<'catalog' | 'sketchfab'>('catalog');
   const [searchQuery, setSearchQuery] = useState('');
   const [sfResults, setSfResults] = useState<SketchfabModel[]>([]);
   const [sfLoading, setSfLoading] = useState(false);
   const [sfSearched, setSfSearched] = useState(false);
+  const [sfToken, setSfToken] = useState(getSketchfabToken());
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [importingUid, setImportingUid] = useState<string | null>(null);
 
   const handlePlaceItem = (item: CatalogItem) => {
     if (!activeSceneId || !item.primitive) return;
@@ -617,6 +622,42 @@ const AssetCatalogPanel: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const result = await searchSketchfab(searchQuery);
     setSfResults(result.models);
     setSfLoading(false);
+  };
+
+  const handleImportModel = async (model: SketchfabModel) => {
+    if (!activeSceneId) return;
+    setImportingUid(model.uid);
+    const result = await downloadSketchfabModel(model.uid);
+    if (result) {
+      // Create asset entry
+      const assetId = `sf-${model.uid}`;
+      addAsset({
+        id: assetId,
+        name: model.name,
+        format: 'glb',
+        url: result.url,
+        fileSizeBytes: 0,
+        status: 'ready',
+        metadata: { source: 'sketchfab', author: model.authorName, license: model.license },
+        validationErrors: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      // Add to scene
+      const objId = addObject(activeSceneId, 'mesh', {
+        name: model.name,
+        assetId,
+        tags: ['sketchfab', 'imported'],
+      });
+      selectObject(objId);
+    }
+    setImportingUid(null);
+  };
+
+  const handleSaveToken = (token: string) => {
+    setSketchfabToken(token);
+    setSfToken(token);
+    setShowTokenInput(false);
   };
 
   const items = activeCategory ? getCatalogByCategory(activeCategory) : [];
@@ -744,6 +785,35 @@ const AssetCatalogPanel: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {tab === 'sketchfab' && (
         <>
+          {/* API Token setup */}
+          {!sfToken && !showTokenInput && (
+            <div style={{ padding: '8px', borderRadius: 6, background: '#1e293b', marginBottom: 8, fontSize: 10, color: '#94a3b8', lineHeight: 1.4 }}>
+              <button onClick={() => setShowTokenInput(true)} style={{ background: '#3b82f6', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: 4, fontSize: 10, cursor: 'pointer', marginBottom: 4 }}>
+                Set API Token
+              </button>
+              <div>Add your Sketchfab API token to import models directly. Get one free at sketchfab.com/settings/password</div>
+            </div>
+          )}
+          {showTokenInput && (
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Paste Sketchfab API token"
+                style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #334155', background: '#1e293b', color: '#fff', fontSize: 11, boxSizing: 'border-box' as const, marginBottom: 4 }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveToken((e.target as HTMLInputElement).value); }}
+              />
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => setShowTokenInput(false)} style={{ flex: 1, padding: '4px', borderRadius: 4, border: '1px solid #334155', background: 'transparent', color: '#94a3b8', fontSize: 10, cursor: 'pointer' }}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {sfToken && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, fontSize: 10 }}>
+              <span style={{ color: '#22c55e' }}>API token set</span>
+              <button onClick={() => handleSaveToken('')} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 10, cursor: 'pointer' }}>Clear</button>
+            </div>
+          )}
+
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Sketchfab Search</div>
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
             <input
@@ -821,26 +891,44 @@ const AssetCatalogPanel: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     {model.authorName} &middot; {(model.faceCount / 1000).toFixed(0)}k faces
                   </div>
                 </div>
-                <a
-                  href={model.viewerUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    padding: '4px 8px', borderRadius: 4,
-                    border: '1px solid #334155', background: '#1e293b',
-                    color: '#3b82f6', fontSize: 10, fontWeight: 600,
-                    textDecoration: 'none', flexShrink: 0,
-                  }}
-                >
-                  View
-                </a>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  {sfToken ? (
+                    <button
+                      onClick={() => handleImportModel(model)}
+                      disabled={importingUid === model.uid}
+                      style={{
+                        padding: '4px 8px', borderRadius: 4,
+                        border: 'none', background: '#22c55e',
+                        color: '#fff', fontSize: 10, fontWeight: 600,
+                        cursor: importingUid === model.uid ? 'wait' : 'pointer',
+                        opacity: importingUid === model.uid ? 0.6 : 1,
+                      }}
+                    >
+                      {importingUid === model.uid ? '...' : 'Add'}
+                    </button>
+                  ) : (
+                    <a
+                      href={model.viewerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '4px 8px', borderRadius: 4,
+                        border: '1px solid #334155', background: '#1e293b',
+                        color: '#3b82f6', fontSize: 10, fontWeight: 600,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      View
+                    </a>
+                  )}
+                </div>
               </div>
             ))}
           </div>
 
-          {sfResults.length > 0 && (
+          {sfResults.length > 0 && !sfToken && (
             <div style={{ fontSize: 10, color: '#475569', marginTop: 8, textAlign: 'center', lineHeight: 1.4 }}>
-              Download models from Sketchfab, then import GLB files via the Asset tray below
+              Set your API token above to import models directly, or download GLB files from Sketchfab manually
             </div>
           )}
         </>

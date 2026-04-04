@@ -22,10 +22,24 @@ export interface SketchfabSearchResult {
 }
 
 const SKETCHFAB_API = 'https://api.sketchfab.com/v3';
+const TOKEN_KEY = 'reach_v2_sketchfab_token';
+
+/** Get saved Sketchfab API token */
+export function getSketchfabToken(): string {
+  return localStorage.getItem(TOKEN_KEY) ?? '';
+}
+
+/** Save Sketchfab API token */
+export function setSketchfabToken(token: string) {
+  if (token.trim()) {
+    localStorage.setItem(TOKEN_KEY, token.trim());
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
 
 /**
  * Search Sketchfab for free, downloadable models.
- * Filters to downloadable models with CC licenses suitable for use.
  */
 export async function searchSketchfab(
   query: string,
@@ -47,7 +61,6 @@ export async function searchSketchfab(
     params.set('cursor', options.cursor);
   }
 
-  // Filter to landscaping/architecture related categories if specified
   if (options.category) {
     params.set('categories', options.category);
   }
@@ -79,6 +92,41 @@ export async function searchSketchfab(
   } catch (err) {
     console.warn('Sketchfab search failed:', err);
     return { models: [], next: null, totalCount: 0 };
+  }
+}
+
+/**
+ * Download a model's GLB from Sketchfab using the API token.
+ * Returns a blob URL to the downloaded GLB file, or null on failure.
+ */
+export async function downloadSketchfabModel(uid: string): Promise<{ url: string; name: string } | null> {
+  const token = getSketchfabToken();
+  if (!token) return null;
+
+  try {
+    // Step 1: Get the download URL from the API
+    const res = await fetch(`${SKETCHFAB_API}/models/${uid}/download`, {
+      headers: { Authorization: `Token ${token}` },
+    });
+    if (!res.ok) {
+      console.warn('Sketchfab download API error:', res.status);
+      return null;
+    }
+    const data = await res.json();
+    // The API returns { glb: { url, size, expires }, gltf: { ... } }
+    const glbInfo = data.glb ?? data.gltf;
+    if (!glbInfo?.url) return null;
+
+    // Step 2: Fetch the actual GLB file
+    const fileRes = await fetch(glbInfo.url);
+    if (!fileRes.ok) return null;
+    const blob = await fileRes.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    return { url: blobUrl, name: `sketchfab-${uid}` };
+  } catch (err) {
+    console.warn('Sketchfab download failed:', err);
+    return null;
   }
 }
 
