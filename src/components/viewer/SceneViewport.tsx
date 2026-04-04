@@ -10,7 +10,6 @@ import { ReferenceOverlays } from './ReferenceOverlays';
 import { FirstPersonControls } from './FirstPersonControls';
 import { ContextMenu } from '@/components/editor/ContextMenu';
 import { GrowthTimeline } from '@/components/editor/GrowthTimeline';
-import { AddPanel } from '@/components/editor/AddPanel';
 import type { Scene } from '@/types';
 import { getGroundMaterial } from '@/config/groundMaterials';
 
@@ -144,7 +143,6 @@ export const SceneViewport: React.FC = () => {
       {/* Canvas overlays */}
       {viewMode === 'editor' && <CanvasToolbar />}
       {viewMode === 'editor' && <RenderModeSelector />}
-      {viewMode === 'editor' && <AddPanel />}
       {viewMode === 'editor' && <DragSelectOverlay scene={scene} />}
       <GrowthTimeline />
 

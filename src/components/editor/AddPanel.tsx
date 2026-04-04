@@ -9,7 +9,6 @@ import { searchSketchfab, downloadSketchfabModel, getSketchfabToken, setSketchfa
 import type { SketchfabModel } from '@/services/sketchfab';
 
 const categories: { id: PlacementType; label: string; desc: string; icon: string }[] = [
-  { id: 'catalog', label: 'Library', desc: 'Browse asset catalog',     icon: '\u{1F4E6}' },
   { id: 'sky',    label: 'Sky',     desc: 'Skybox & environment',     icon: '\u2600' },
   { id: 'object', label: 'Object',  desc: 'Box, sphere, plane mesh',  icon: '\u25A2' },
   { id: 'video',  label: 'Video',   desc: 'Video screen in scene',    icon: '\u25B6' },
@@ -31,35 +30,42 @@ const skyPresets = [
   { id: 'lobby', label: 'Lobby' },
 ];
 
-export const AddPanel: React.FC = () => {
+interface AddPanelProps {
+  /** When true, renders inline (no absolute positioning) */
+  embedded?: boolean;
+  onClose?: () => void;
+}
+
+export const AddPanel: React.FC<AddPanelProps> = ({ embedded, onClose }) => {
   const activeTool = useProjectStore((s) => s.editor.activeTool);
   const placementType = useProjectStore((s) => s.editor.placementType);
   const setPlacementType = useProjectStore((s) => s.setPlacementType);
   const setActiveTool = useProjectStore((s) => s.setActiveTool);
 
-  if (activeTool !== 'place') return null;
+  // In non-embedded (canvas overlay) mode, only show when place tool is active
+  if (!embedded && activeTool !== 'place') return null;
 
-  // Once a type is selected, dock to the right as a compact sidebar
-  const isDocked = !!placementType;
-  const isWide = placementType === ('catalog' as any) || placementType === 'sky';
+  const containerStyle = embedded
+    ? styles.embeddedPanel
+    : (placementType ? styles.panelDocked : styles.panel);
 
   return (
-    <div style={isDocked ? { ...styles.panelDocked, ...(isWide ? { width: 300 } : {}) } : styles.panel}>
-      <div style={styles.header}>
-        <span style={styles.title}>{isDocked ? '' : 'Add to Scene'}</span>
-        <button style={styles.closeBtn} onClick={() => setActiveTool('select')}>&times;</button>
-      </div>
+    <div style={containerStyle}>
+      {!embedded && (
+        <div style={styles.header}>
+          <span style={styles.title}>Add to Scene</span>
+          <button style={styles.closeBtn} onClick={() => setActiveTool('select')}>&times;</button>
+        </div>
+      )}
 
       {placementType === 'sky' ? (
         <SkySettings onBack={() => setPlacementType(null)} />
       ) : placementType === 'zone' ? (
         <ZoneSettings onBack={() => setPlacementType(null)} />
-      ) : placementType === 'catalog' as any ? (
-        <AssetCatalogPanel onBack={() => setPlacementType(null)} />
       ) : placementType ? (
         <PlacementSettings type={placementType} onBack={() => setPlacementType(null)} />
       ) : (
-        <div style={styles.grid}>
+        <div style={embedded ? styles.embeddedGrid : styles.grid}>
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -976,6 +982,18 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 100,
     color: '#e2e8f0',
     fontSize: 12,
+  },
+  embeddedPanel: {
+    color: '#e2e8f0',
+    fontSize: 12,
+    height: '100%',
+    overflowY: 'auto' as const,
+  },
+  embeddedGrid: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 2,
+    padding: 8,
   },
   header: {
     display: 'flex',
