@@ -34,7 +34,7 @@ export const EditorShell: React.FC = () => {
       <div style={styles.body}>
         {/* Left collapsible Add panel */}
         <div style={styles.leftSide}>
-          <button
+          <div
             onClick={() => setAddOpen(!addOpen)}
             style={{
               ...styles.leftTab,
@@ -43,7 +43,7 @@ export const EditorShell: React.FC = () => {
           >
             <span style={styles.leftTabIcon}>+</span>
             <span style={styles.leftTabLabel}>Add</span>
-          </button>
+          </div>
           {addOpen && (
             <div style={styles.leftPanel}>
               <AddPanel embedded onClose={() => setAddOpen(false)} />
@@ -98,44 +98,52 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     overflow: 'hidden',
+    minHeight: 0,
   },
 
   /* --- Left Add panel --- */
   leftSide: {
     display: 'flex',
     flexShrink: 0,
-    position: 'relative',
+    height: '100%',
   },
   leftTab: {
-    writingMode: 'vertical-lr',
-    textOrientation: 'mixed',
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: 6,
-    padding: '16px 6px',
+    justifyContent: 'flex-start',
+    paddingTop: 12,
+    gap: 4,
+    width: 48,
     background: '#0f172a',
     border: 'none',
     borderRight: '1px solid #1e293b',
     color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: 600,
     cursor: 'pointer',
-    letterSpacing: 1,
+    userSelect: 'none' as const,
+    transition: 'background 0.15s, color 0.15s',
   },
   leftTabActive: {
     background: '#1e293b',
     color: '#3b82f6',
-    borderRight: '1px solid #1e293b',
   },
   leftTabIcon: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 700,
     lineHeight: 1,
+    width: 32,
+    height: 32,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    background: 'rgba(59,130,246,0.1)',
   },
   leftTabLabel: {
-    fontSize: 11,
+    fontSize: 9,
     textTransform: 'uppercase' as const,
-    letterSpacing: 1.5,
+    letterSpacing: 1,
+    fontWeight: 600,
   },
   leftPanel: {
     width: 260,
@@ -153,11 +161,13 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     overflow: 'hidden',
     minWidth: 0,
+    minHeight: 0,
   },
   viewport: {
     flex: 1,
     position: 'relative',
     overflow: 'hidden',
+    minHeight: 0,
   },
 
   /* --- Bottom Library panel --- */
@@ -165,28 +175,30 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    padding: '6px 16px',
-    background: '#0f172a',
+    gap: 10,
+    padding: '10px 16px',
+    background: '#131a2e',
     border: 'none',
-    borderTop: '1px solid #1e293b',
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: 600,
+    borderTop: '2px solid #3b82f6',
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontWeight: 700,
     cursor: 'pointer',
     width: '100%',
     flexShrink: 0,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
   },
   bottomTabActive: {
     background: '#1e293b',
     color: '#3b82f6',
+    borderTop: '2px solid #3b82f6',
   },
   bottomTabIcon: {
-    fontSize: 10,
+    fontSize: 12,
   },
   bottomTabLabel: {
-    fontSize: 11,
-    textTransform: 'uppercase' as const,
+    fontSize: 12,
     letterSpacing: 1.5,
   },
   bottomPanel: {
