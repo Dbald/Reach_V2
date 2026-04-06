@@ -40,7 +40,7 @@ export const SceneViewport: React.FC = () => {
   const env = scene.environment;
 
   return (
-    <div style={{ flex: 1, position: 'relative', background: '#1a1a2e' }} onContextMenu={(e) => e.preventDefault()}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', background: '#1a1a2e' }} onContextMenu={(e) => e.preventDefault()}>
       <Canvas
         camera={{ position: [0, 5, 10], fov: 60, near: 0.1, far: 1000 }}
         shadows
