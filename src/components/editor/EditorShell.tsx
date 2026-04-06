@@ -44,17 +44,18 @@ export const EditorShell: React.FC = () => {
             <span style={styles.leftTabIcon}>+</span>
             <span style={styles.leftTabLabel}>Add</span>
           </div>
-          {addOpen && (
-            <div style={styles.leftPanel}>
-              <AddPanel embedded onClose={() => setAddOpen(false)} />
-            </div>
-          )}
         </div>
 
         {/* Center: viewport + bottom library */}
         <div style={styles.center}>
           <div style={styles.viewport}>
             <SceneViewport />
+            {/* Add panel overlays on top of viewport */}
+            {addOpen && (
+              <div style={styles.leftPanel}>
+                <AddPanel embedded onClose={() => setAddOpen(false)} />
+              </div>
+            )}
           </div>
 
           {/* Bottom collapsible Library */}
@@ -146,12 +147,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
   },
   leftPanel: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
     width: 260,
+    height: '100%',
     background: '#0f172a',
     borderRight: '1px solid #1e293b',
     overflowY: 'auto' as const,
     overflowX: 'hidden' as const,
-    flexShrink: 0,
+    zIndex: 20,
+    boxShadow: '4px 0 12px rgba(0,0,0,0.4)',
   },
 
   /* --- Center --- */
