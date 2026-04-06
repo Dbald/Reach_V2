@@ -44,18 +44,19 @@ export const EditorShell: React.FC = () => {
             <span style={styles.leftTabIcon}>+</span>
             <span style={styles.leftTabLabel}>Add</span>
           </div>
+          <div style={{
+            ...styles.leftPanel,
+            width: addOpen ? 260 : 0,
+            opacity: addOpen ? 1 : 0,
+          }}>
+            {addOpen && <AddPanel embedded onClose={() => setAddOpen(false)} />}
+          </div>
         </div>
 
         {/* Center: viewport + bottom library */}
         <div style={styles.center}>
           <div style={styles.viewport}>
             <SceneViewport />
-            {/* Add panel overlays on top of viewport */}
-            {addOpen && (
-              <div style={styles.leftPanel}>
-                <AddPanel embedded onClose={() => setAddOpen(false)} />
-              </div>
-            )}
           </div>
 
           {/* Bottom collapsible Library */}
@@ -69,11 +70,13 @@ export const EditorShell: React.FC = () => {
             <span style={styles.bottomTabIcon}>{libraryOpen ? '\u25BC' : '\u25B2'}</span>
             <span style={styles.bottomTabLabel}>Library</span>
           </button>
-          {libraryOpen && (
-            <div style={styles.bottomPanel}>
-              <AssetTray embedded />
-            </div>
-          )}
+          <div style={{
+            ...styles.bottomPanel,
+            height: libraryOpen ? 280 : 0,
+            opacity: libraryOpen ? 1 : 0,
+          }}>
+            {libraryOpen && <AssetTray embedded />}
+          </div>
         </div>
 
         {/* Right panel: Hierarchy + Properties */}
@@ -147,17 +150,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
   },
   leftPanel: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 260,
-    height: '100%',
     background: '#0f172a',
     borderRight: '1px solid #1e293b',
     overflowY: 'auto' as const,
     overflowX: 'hidden' as const,
-    zIndex: 20,
-    boxShadow: '4px 0 12px rgba(0,0,0,0.4)',
+    flexShrink: 0,
+    transition: 'width 0.25s ease, opacity 0.2s ease',
   },
 
   /* --- Center --- */
@@ -208,11 +206,12 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 1.5,
   },
   bottomPanel: {
-    height: 280,
     background: '#0f172a',
     borderTop: '1px solid #1e293b',
     overflowY: 'auto' as const,
+    overflowX: 'hidden' as const,
     flexShrink: 0,
+    transition: 'height 0.25s ease, opacity 0.2s ease',
   },
 
   /* --- Right panel --- */
