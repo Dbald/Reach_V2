@@ -596,7 +596,7 @@ const GroundPlane: React.FC<{ env: Scene['environment']; renderMode: RenderMode 
     tex.repeat.set(repeat, repeat);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
-  }, [gm]);
+  }, [gm?.id]);
 
   return (
     <mesh
