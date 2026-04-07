@@ -577,7 +577,7 @@ const GroundInteraction: React.FC = () => {
   );
 };
 
-/** Ground plane with material-based appearance */
+/** Ground plane with material-based appearance and optional tiled texture */
 const GroundPlane: React.FC<{ env: Scene['environment']; renderMode: RenderMode }> = ({ env, renderMode }) => {
   const gm = env.groundMaterial ? getGroundMaterial(env.groundMaterial) : null;
   const baseColor = gm
@@ -585,6 +585,18 @@ const GroundPlane: React.FC<{ env: Scene['environment']; renderMode: RenderMode 
     : env.groundColor
       ? `rgb(${Math.round(env.groundColor.r * 255)},${Math.round(env.groundColor.g * 255)},${Math.round(env.groundColor.b * 255)})`
       : '#8ca67a';
+
+  const texture = React.useMemo(() => {
+    if (!gm?.textureGenerator) return null;
+    const canvas = gm.textureGenerator();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    const repeat = gm.tileRepeat ?? 8;
+    tex.repeat.set(repeat, repeat);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }, [gm]);
 
   return (
     <mesh
@@ -594,7 +606,8 @@ const GroundPlane: React.FC<{ env: Scene['environment']; renderMode: RenderMode 
     >
       <planeGeometry args={[env.groundSize!.x, env.groundSize!.z]} />
       <meshStandardMaterial
-        color={baseColor}
+        color={texture ? '#ffffff' : baseColor}
+        map={texture}
         roughness={gm?.roughness ?? 0.7}
         metalness={gm?.metalness ?? 0}
         wireframe={renderMode === 'wireframe'}
