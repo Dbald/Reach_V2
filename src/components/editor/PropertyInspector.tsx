@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { useProjectStore } from '@/store';
 import type { SceneObject, Vector3, Quaternion, GrowthStage } from '@/types';
 import { detectFormat, createAssetFromFile, processAsset } from '@/services/assetPipeline';
+import { GROUND_MATERIALS } from '@/config/groundMaterials';
 
 export const PropertyInspector: React.FC = () => {
   const project = useProjectStore((s) => s.project);
@@ -499,18 +500,8 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
               style={styles.numInput}
             />
           </label>
-          <label style={styles.fieldLabel}>
-            Tile Repeat
-            <input
-              type="number"
-              step={1}
-              min={1}
-              value={(obj.metadata?.tileRepeat as number) ?? 4}
-              onChange={(e) => handleMetadata('tileRepeat', Math.max(1, parseInt(e.target.value) || 4))}
-              style={styles.numInput}
-            />
-          </label>
           <div style={{ ...styles.fieldLabel, marginBottom: 4 }}>Control Points</div>
+          <div style={{ fontSize: 9, color: '#64748b', marginBottom: 6 }}>Drag the blue handles in the viewport or edit values below</div>
           {((obj.metadata?.curvePoints as Array<{x: number; y: number; z: number}>) ?? []).map((pt, i) => (
             <div key={i} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
               <span style={{ fontSize: 9, color: '#64748b', width: 14 }}>P{i}</span>
@@ -545,10 +536,37 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
         </Section>
       )}
 
-      {/* Ground material for surfaces */}
-      {obj.metadata?.groundMaterial && !obj.metadata?.isCurvePath && (
+      {/* Surface texture picker (for surfaces and curve paths with groundMaterial) */}
+      {obj.metadata?.groundMaterial && (
         <Section title="Surface Texture">
-          <label style={styles.fieldLabel}>
+          <div style={{ ...styles.fieldLabel, marginBottom: 4 }}>Material</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+            {GROUND_MATERIALS.filter(m => m.id !== 'custom').map((mat) => (
+              <button
+                key={mat.id}
+                onClick={() => handleMetadata('groundMaterial', mat.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '4px 6px',
+                  borderRadius: 4,
+                  border: `1px solid ${obj.metadata?.groundMaterial === mat.id ? '#3b82f6' : '#334155'}`,
+                  background: obj.metadata?.groundMaterial === mat.id ? '#1e293b' : '#0a0a1a',
+                  color: obj.metadata?.groundMaterial === mat.id ? '#fff' : '#94a3b8',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                }}
+              >
+                <span style={{
+                  width: 12, height: 12, borderRadius: 2,
+                  background: mat.color, flexShrink: 0,
+                }} />
+                <span>{mat.label}</span>
+              </button>
+            ))}
+          </div>
+          <label style={{ ...styles.fieldLabel, marginTop: 8 }}>
             Tile Repeat
             <input
               type="number"

@@ -1045,6 +1045,30 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
             {selectionOutline}
           </mesh>
         </group>
+        {/* Draggable control point handles (shown when selected) */}
+        {isSelected && curvePoints && curvePoints.map((pt, idx) => (
+          <CurvePointHandle
+            key={idx}
+            index={idx}
+            point={pt}
+            objId={obj.id}
+            sceneId={sceneId}
+            objPos={pos}
+          />
+        ))}
+        {/* Lines connecting control points when selected */}
+        {isSelected && curvePoints && curvePoints.length > 1 && (
+          <line>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                args={[new Float32Array(curvePoints.flatMap(p => [p.x + pos[0], (p.y || 0) + pos[1] + 0.15, p.z + pos[2]])), 3]}
+                count={curvePoints.length}
+              />
+            </bufferGeometry>
+            <lineBasicMaterial color="#3b82f6" transparent opacity={0.5} />
+          </line>
+        )}
         {gizmoElement}
       </>
     );
@@ -1166,6 +1190,100 @@ const GrowthStageLabel: React.FC<{
     </div>
   </Html>
 );
+
+/** Loads a texture from URL and applies it to a mesh */
+
+/** Draggable handle sphere for curve path control points */
+const CurvePointHandle: React.FC<{
+  index: number;
+  point: { x: number; y: number; z: number };
+  objId: string;
+  sceneId: string;
+  objPos: [number, number, number];
+}> = ({ index, point, objId, sceneId, objPos }) => {
+  const { gl, camera } = useThree();
+  const sphereRef = useRef<THREE.Mesh>(null);
+  const dragging = useRef(false);
+  const dragPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+  const [hovered, setHovered] = useState(false);
+
+  const worldPos: [number, number, number] = [
+    point.x + objPos[0],
+    (point.y || 0) + objPos[1] + 0.15,
+    point.z + objPos[2],
+  ];
+
+  const handlePointerDown = useCallback((e: any) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    dragging.current = true;
+    dragPlane.constant = -(worldPos[1]);
+    (gl.domElement as HTMLElement).style.cursor = 'grabbing';
+    (gl.domElement as any).setPointerCapture?.(e.pointerId);
+  }, [gl, worldPos, dragPlane]);
+
+  useEffect(() => {
+    const el = gl.domElement;
+
+    const onMove = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      const rect = el.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(ndc, camera);
+      const hit = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(dragPlane, hit)) {
+        // Snap to 0.25 grid
+        const newX = Math.round((hit.x - objPos[0]) * 4) / 4;
+        const newZ = Math.round((hit.z - objPos[2]) * 4) / 4;
+        const store = useProjectStore.getState();
+        const current = store.project?.scenes[sceneId]?.objects[objId];
+        if (current?.metadata?.curvePoints) {
+          const pts = [...(current.metadata.curvePoints as any[])];
+          pts[index] = { ...pts[index], x: newX, z: newZ };
+          useProjectStore.setState((state: any) => {
+            const o = state.project?.scenes[sceneId]?.objects[objId];
+            if (o) o.metadata.curvePoints = pts;
+          });
+        }
+      }
+    };
+
+    const onUp = () => {
+      if (dragging.current) {
+        dragging.current = false;
+        el.style.cursor = '';
+      }
+    };
+
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    return () => {
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+    };
+  }, [gl, camera, dragPlane, objPos, sceneId, objId, index]);
+
+  return (
+    <mesh
+      ref={sphereRef}
+      position={worldPos}
+      onPointerDown={handlePointerDown}
+      onPointerOver={() => { setHovered(true); gl.domElement.style.cursor = 'grab'; }}
+      onPointerOut={() => { setHovered(false); if (!dragging.current) gl.domElement.style.cursor = ''; }}
+    >
+      <sphereGeometry args={[0.15, 16, 16]} />
+      <meshBasicMaterial
+        color={hovered ? '#60a5fa' : '#3b82f6'}
+        transparent
+        opacity={0.9}
+      />
+    </mesh>
+  );
+};
 
 /** Loads a texture from URL and applies it to a mesh */
 const TexturedMaterial: React.FC<{
