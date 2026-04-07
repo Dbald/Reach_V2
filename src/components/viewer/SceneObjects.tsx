@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useProjectStore } from '@/store';
 import type { RenderMode } from '@/store/projectStore';
 import type { Scene, SceneObject } from '@/types';
+import { getGroundMaterial } from '@/config/groundMaterials';
 
 /** Shared geometry for selection outlines — avoids creating new BoxGeometry every render */
 const selectionBoxGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
@@ -954,6 +955,101 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
     );
   }
 
+  // --- Curve path (spline-based tube with textured surface) ---
+  const isCurvePath = obj.metadata?.isCurvePath as boolean;
+  const curvePoints = obj.metadata?.curvePoints as Array<{x: number; y: number; z: number}> | undefined;
+  const curveWidth = (obj.metadata?.curveWidth as number) || 1.2;
+
+  const curveGeometry = useMemo(() => {
+    if (!isCurvePath || !curvePoints || curvePoints.length < 2) return null;
+    const pts = curvePoints.map((p) => new THREE.Vector3(p.x, p.y + 0.02, p.z));
+    const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.5);
+    const tubeSeg = 64;
+    const frames = curve.computeFrenetFrames(tubeSeg, false);
+    const halfW = curveWidth / 2;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    for (let i = 0; i <= tubeSeg; i++) {
+      const t = i / tubeSeg;
+      const pt = curve.getPointAt(t);
+      const N = frames.normals[i];
+      const B = frames.binormals[i];
+      // Flatten to horizontal: use only X/Z of binormal
+      const bx = B.x, bz = B.z;
+      const bLen = Math.sqrt(bx * bx + bz * bz) || 1;
+      const flatBx = (bx / bLen) * halfW;
+      const flatBz = (bz / bLen) * halfW;
+      // Left edge
+      positions.push(pt.x - flatBx, pt.y, pt.z - flatBz);
+      uvs.push(0, t * (curvePoints.length - 1));
+      // Right edge
+      positions.push(pt.x + flatBx, pt.y, pt.z + flatBz);
+      uvs.push(1, t * (curvePoints.length - 1));
+      if (i < tubeSeg) {
+        const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }, [isCurvePath, JSON.stringify(curvePoints), curveWidth]);
+
+  // --- Ground material texture (for surfaces and curve paths) ---
+  const groundMatId = obj.metadata?.groundMaterial as string | undefined;
+  const groundTileRepeat = (obj.metadata?.tileRepeat as number) || 4;
+
+  const groundTexture = useMemo(() => {
+    if (!groundMatId) return null;
+    const gm = getGroundMaterial(groundMatId as any);
+    if (!gm?.textureGenerator) return null;
+    const canvas = gm.textureGenerator();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(groundTileRepeat, groundTileRepeat);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }, [groundMatId, groundTileRepeat]);
+
+  if (isCurvePath && curveGeometry) {
+    return (
+      <>
+        <group
+          ref={meshCallback as any}
+          position={pos}
+          scale={scale}
+          rotation={rotation}
+        >
+          <mesh
+            geometry={curveGeometry}
+            onClick={handleClick}
+            onPointerDown={handlePointerDown}
+            castShadow
+            receiveShadow
+          >
+            <meshStandardMaterial
+              color={groundTexture ? '#ffffff' : getColor()}
+              map={groundTexture}
+              roughness={0.85}
+              metalness={0}
+              side={THREE.DoubleSide}
+              wireframe={isWireframe}
+              transparent={isSelected}
+              opacity={isSelected ? 0.85 : 1}
+            />
+            {selectionOutline}
+          </mesh>
+        </group>
+        {gizmoElement}
+      </>
+    );
+  }
+
   // --- Default mesh (primitives, with optional growth stage overrides) ---
   const shape = activeStage?.shape || (obj.metadata?.shape as string) || 'box';
   // Geometry is shifted up by half its height so the origin is at the bottom
@@ -1005,6 +1101,17 @@ const SceneObjectMesh: React.FC<{ object: SceneObject; sceneId: string; renderMo
               texRotation={obj.material?.textureRotation}
               brightness={obj.material?.brightness}
               opacity={obj.material?.opacity}
+            />
+          ) : groundTexture ? (
+            <meshStandardMaterial
+              color="#ffffff"
+              map={groundTexture}
+              transparent={isSelected}
+              opacity={isSelected ? 0.85 : 1}
+              roughness={obj.material?.roughness ?? 0.85}
+              metalness={obj.material?.metalness ?? 0}
+              side={shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide}
+              wireframe={isWireframe}
             />
           ) : (
             <meshStandardMaterial

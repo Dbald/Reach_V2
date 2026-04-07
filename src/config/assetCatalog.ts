@@ -40,6 +40,8 @@ export interface CatalogItem {
   tags: string[];
   /** Growth stages for time-based visualization */
   growthStages?: GrowthStage[];
+  /** Ground material ID for textured surfaces */
+  groundMaterial?: string;
 }
 
 export const CATALOG_CATEGORIES: CatalogCategory[] = [
@@ -101,11 +103,23 @@ export const CATALOG_ITEMS: CatalogItem[] = [
   { id: 'wall-stone',      name: 'Stone Wall',        category: 'fences', type: 'primitive', primitive: { shape: 'box', scale: [3, 0.8, 0.25], color: '#8a8580', yOffset: 0 }, tags: ['wall', 'retaining'] },
   { id: 'gate-entry',      name: 'Garden Gate',       category: 'fences', type: 'primitive', primitive: { shape: 'box', scale: [1.2, 1.4, 0.08], color: '#3a3a3a', yOffset: 0 }, tags: ['gate', 'entry'] },
 
-  // Surfaces
-  { id: 'path-stone',      name: 'Stone Path',        category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [1.2, 0.03, 5], color: '#9a9080', yOffset: 0 }, tags: ['path', 'walkway'] },
-  { id: 'patio-area',      name: 'Patio Pad',         category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [4, 0.05, 4], color: '#b0a890', yOffset: 0 }, tags: ['patio', 'ground'] },
-  { id: 'mulch-bed',       name: 'Mulch Bed',         category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [3, 0.08, 2], color: '#5c3d2e', yOffset: 0 }, tags: ['mulch', 'garden'] },
-  { id: 'gravel-area',     name: 'Gravel Area',       category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [3, 0.04, 3], color: '#b0a890', yOffset: 0 }, tags: ['gravel', 'drainage'] },
+  // Surfaces — textured ground material pads
+  { id: 'surface-grass',     name: 'Grass Pad',       category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [4, 0.04, 4], color: '#5a8a3c', yOffset: 0 }, tags: ['grass', 'ground'], groundMaterial: 'grass' },
+  { id: 'surface-stone',     name: 'Stone Pad',       category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [4, 0.04, 4], color: '#8a8a85', yOffset: 0 }, tags: ['stone', 'ground'], groundMaterial: 'stone' },
+  { id: 'surface-concrete',  name: 'Concrete Pad',    category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [4, 0.05, 4], color: '#b0b0aa', yOffset: 0 }, tags: ['concrete', 'patio'], groundMaterial: 'concrete' },
+  { id: 'surface-gravel',    name: 'Gravel Area',     category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [3, 0.04, 3], color: '#9a9080', yOffset: 0 }, tags: ['gravel', 'drainage'], groundMaterial: 'gravel' },
+  { id: 'surface-wooddeck',  name: 'Wood Deck',       category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [4, 0.12, 3], color: '#8b6842', yOffset: 0 }, tags: ['deck', 'wood'], groundMaterial: 'wood-deck' },
+  { id: 'surface-pavers',    name: 'Paver Patio',     category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [4, 0.05, 4], color: '#c4a882', yOffset: 0 }, tags: ['pavers', 'patio'], groundMaterial: 'pavers' },
+  { id: 'surface-mulch',     name: 'Mulch Bed',       category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [3, 0.08, 2], color: '#5c3d2e', yOffset: 0 }, tags: ['mulch', 'garden'], groundMaterial: 'mulch' },
+  { id: 'surface-sand',      name: 'Sand Area',       category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [3, 0.04, 3], color: '#d4c4a0', yOffset: 0 }, tags: ['sand', 'beach'], groundMaterial: 'sand' },
+  { id: 'surface-dirt',      name: 'Dirt Patch',      category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [3, 0.04, 3], color: '#7a6040', yOffset: 0 }, tags: ['dirt', 'earth'], groundMaterial: 'dirt' },
+  // Paths (straight segments)
+  { id: 'path-stone',        name: 'Stone Path',      category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [1.2, 0.03, 5], color: '#8a8a85', yOffset: 0 }, tags: ['path', 'walkway'], groundMaterial: 'stone' },
+  { id: 'path-concrete',     name: 'Concrete Path',   category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [1.2, 0.03, 5], color: '#b0b0aa', yOffset: 0 }, tags: ['path', 'walkway'], groundMaterial: 'concrete' },
+  { id: 'path-gravel',       name: 'Gravel Path',     category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [1.2, 0.03, 5], color: '#9a9080', yOffset: 0 }, tags: ['path', 'walkway'], groundMaterial: 'gravel' },
+  { id: 'path-pavers',       name: 'Paver Path',      category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [1.2, 0.03, 5], color: '#c4a882', yOffset: 0 }, tags: ['path', 'walkway'], groundMaterial: 'pavers' },
+  // Curve path tool
+  { id: 'curve-path',        name: 'Curve Path',      category: 'surfaces', type: 'primitive', primitive: { shape: 'box', scale: [1, 0.03, 1], color: '#8a8a85', yOffset: 0 }, tags: ['path', 'curve', 'walkway'], groundMaterial: 'stone' },
 
   // Lighting
   { id: 'path-light',      name: 'Path Light',        category: 'lighting', type: 'primitive', primitive: { shape: 'cylinder', scale: [0.08, 0.6, 0.08], color: '#2a2a2a', yOffset: 0 }, tags: ['light', 'path'] },

@@ -155,6 +155,7 @@ const CatalogTab: React.FC = () => {
   const handlePlaceItem = (item: CatalogItem) => {
     if (!activeSceneId || !item.primitive) return;
     const p = item.primitive;
+    const isCurvePath = item.id === 'curve-path';
     const id = addObject(activeSceneId, 'mesh', {
       name: item.name,
       transform: {
@@ -168,7 +169,17 @@ const CatalogTab: React.FC = () => {
         metalness: 0,
       },
       tags: item.tags,
-      metadata: { shape: p.shape, catalogId: item.id },
+      metadata: {
+        shape: p.shape,
+        catalogId: item.id,
+        ...(item.groundMaterial ? { groundMaterial: item.groundMaterial, tileRepeat: 4 } : {}),
+        ...(isCurvePath ? { isCurvePath: true, curvePoints: [
+          { x: 0, y: 0, z: -2 },
+          { x: 1.5, y: 0, z: -0.5 },
+          { x: 1.5, y: 0, z: 0.5 },
+          { x: 0, y: 0, z: 2 },
+        ], curveWidth: 1.2 } : {}),
+      },
       ...(item.growthStages ? { growthStages: item.growthStages, activeStageIndex: 0 } : {}),
     });
     selectObject(id);
@@ -206,7 +217,7 @@ const CatalogTab: React.FC = () => {
               <span style={{ fontSize: 20 }}>{cat.icon}</span>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#e2e8f0' }}>{cat.label}</div>
-                <div style={{ fontSize: 9, color: '#64748b' }}>{cat.count} items</div>
+                <div style={{ fontSize: 9, color: '#64748b' }}>{getCatalogByCategory(cat.id).length} items</div>
               </div>
             </button>
           ))}

@@ -485,6 +485,83 @@ const PropertyContent: React.FC<{ obj: SceneObject; sceneId: string }> = ({ obj,
         <CameraSection obj={obj} sceneId={sceneId} handleMetadata={handleMetadata} />
       )}
 
+      {/* Curve path controls */}
+      {obj.metadata?.isCurvePath && (
+        <Section title="Curve Path">
+          <label style={styles.fieldLabel}>
+            Width
+            <input
+              type="number"
+              step={0.1}
+              min={0.2}
+              value={(obj.metadata?.curveWidth as number) ?? 1.2}
+              onChange={(e) => handleMetadata('curveWidth', parseFloat(e.target.value) || 1.2)}
+              style={styles.numInput}
+            />
+          </label>
+          <label style={styles.fieldLabel}>
+            Tile Repeat
+            <input
+              type="number"
+              step={1}
+              min={1}
+              value={(obj.metadata?.tileRepeat as number) ?? 4}
+              onChange={(e) => handleMetadata('tileRepeat', Math.max(1, parseInt(e.target.value) || 4))}
+              style={styles.numInput}
+            />
+          </label>
+          <div style={{ ...styles.fieldLabel, marginBottom: 4 }}>Control Points</div>
+          {((obj.metadata?.curvePoints as Array<{x: number; y: number; z: number}>) ?? []).map((pt, i) => (
+            <div key={i} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
+              <span style={{ fontSize: 9, color: '#64748b', width: 14 }}>P{i}</span>
+              <input type="number" step={0.5} value={pt.x} onChange={(e) => {
+                const pts = [...((obj.metadata?.curvePoints as any[]) ?? [])];
+                pts[i] = { ...pts[i], x: parseFloat(e.target.value) || 0 };
+                handleMetadata('curvePoints', pts);
+              }} style={{ ...styles.numInput, flex: 1 }} placeholder="X" />
+              <input type="number" step={0.5} value={pt.z} onChange={(e) => {
+                const pts = [...((obj.metadata?.curvePoints as any[]) ?? [])];
+                pts[i] = { ...pts[i], z: parseFloat(e.target.value) || 0 };
+                handleMetadata('curvePoints', pts);
+              }} style={{ ...styles.numInput, flex: 1 }} placeholder="Z" />
+              {((obj.metadata?.curvePoints as any[]) ?? []).length > 2 && (
+                <button onClick={() => {
+                  const pts = [...((obj.metadata?.curvePoints as any[]) ?? [])];
+                  pts.splice(i, 1);
+                  handleMetadata('curvePoints', pts);
+                }} style={{ ...styles.chip, padding: '2px 6px', fontSize: 10 }}>X</button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              const pts = [...((obj.metadata?.curvePoints as any[]) ?? [])];
+              const last = pts[pts.length - 1] ?? { x: 0, y: 0, z: 0 };
+              pts.push({ x: last.x, y: 0, z: last.z + 2 });
+              handleMetadata('curvePoints', pts);
+            }}
+            style={{ ...styles.chip, width: '100%', marginTop: 4 }}
+          >+ Add Point</button>
+        </Section>
+      )}
+
+      {/* Ground material for surfaces */}
+      {obj.metadata?.groundMaterial && !obj.metadata?.isCurvePath && (
+        <Section title="Surface Texture">
+          <label style={styles.fieldLabel}>
+            Tile Repeat
+            <input
+              type="number"
+              step={1}
+              min={1}
+              value={(obj.metadata?.tileRepeat as number) ?? 4}
+              onChange={(e) => handleMetadata('tileRepeat', Math.max(1, parseInt(e.target.value) || 4))}
+              style={styles.numInput}
+            />
+          </label>
+        </Section>
+      )}
+
       <Section title="Tags">
         <div style={styles.tagList}>
           {obj.tags.length === 0 && <span style={styles.muted}>No tags</span>}
