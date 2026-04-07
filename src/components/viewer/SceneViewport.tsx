@@ -586,17 +586,18 @@ const GroundPlane: React.FC<{ env: Scene['environment']; renderMode: RenderMode 
       ? `rgb(${Math.round(env.groundColor.r * 255)},${Math.round(env.groundColor.g * 255)},${Math.round(env.groundColor.b * 255)})`
       : '#8ca67a';
 
+  const tileRepeat = env.groundTileRepeat ?? gm?.tileRepeat ?? 8;
+
   const texture = React.useMemo(() => {
     if (!gm?.textureGenerator) return null;
     const canvas = gm.textureGenerator();
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
-    const repeat = gm.tileRepeat ?? 8;
-    tex.repeat.set(repeat, repeat);
+    tex.repeat.set(tileRepeat, tileRepeat);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
-  }, [gm?.id]);
+  }, [gm?.id, tileRepeat]);
 
   return (
     <mesh
@@ -608,7 +609,7 @@ const GroundPlane: React.FC<{ env: Scene['environment']; renderMode: RenderMode 
       <meshStandardMaterial
         color={texture ? '#ffffff' : baseColor}
         map={texture}
-        roughness={gm?.roughness ?? 0.7}
+        roughness={env.groundRoughness ?? gm?.roughness ?? 0.7}
         metalness={gm?.metalness ?? 0}
         wireframe={renderMode === 'wireframe'}
       />

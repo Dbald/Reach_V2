@@ -574,6 +574,57 @@ const SkySettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </button>
             ))}
           </div>
+
+          {/* Ground material properties */}
+          <div style={{ ...styles.sectionTitle, marginTop: 10 }}>Ground Properties</div>
+          <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8' }}>
+              <span>Tile Repeat</span>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                step={1}
+                value={env?.groundTileRepeat ?? 10}
+                onChange={(e) => updateEnv({ groundTileRepeat: Math.max(1, parseFloat(e.target.value) || 10) })}
+                style={{ ...styles.numInput, width: 56 }}
+              />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8' }}>
+              <span>Roughness</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={env?.groundRoughness ?? 0.85}
+                onChange={(e) => updateEnv({ groundRoughness: parseFloat(e.target.value) })}
+                style={{ width: 80 }}
+              />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8' }}>
+              <span>Size X</span>
+              <input
+                type="number"
+                min={1}
+                step={5}
+                value={env?.groundSize?.x ?? 50}
+                onChange={(e) => updateEnv({ groundSize: { x: parseFloat(e.target.value) || 50, y: 0, z: env?.groundSize?.z ?? 50 } })}
+                style={{ ...styles.numInput, width: 56 }}
+              />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8' }}>
+              <span>Size Z</span>
+              <input
+                type="number"
+                min={1}
+                step={5}
+                value={env?.groundSize?.z ?? 50}
+                onChange={(e) => updateEnv({ groundSize: { x: env?.groundSize?.x ?? 50, y: 0, z: parseFloat(e.target.value) || 50 } })}
+                style={{ ...styles.numInput, width: 56 }}
+              />
+            </label>
+          </div>
         </>
       )}
     </div>

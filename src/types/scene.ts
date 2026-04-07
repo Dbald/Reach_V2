@@ -186,6 +186,8 @@ export interface EnvironmentConfig {
   groundColor?: Color;
   groundSize?: Vector3;
   groundMaterial?: GroundMaterial;
+  groundTileRepeat?: number;
+  groundRoughness?: number;
 }
 
 // --- Reference overlays ---
